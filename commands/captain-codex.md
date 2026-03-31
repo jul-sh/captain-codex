@@ -24,19 +24,19 @@ You are orchestrating a full plan-implement-review pipeline. Follow these phases
 
 Parse the flags from the user's input. Extract the `<task description>` (everything after flags).
 
-1. Read config using `scripts/config.sh read`.
+1. Read config using `scripts/config.sh read`. Extract `codex.model` (default: `gpt-5.4`) and `codex.reasoning_effort` (default: `xhigh`) — these must be passed on every Codex dispatch.
 
 2. If `--skip-plan <path>` was provided:
    - Verify the plan file exists at `<path>`
    - Skip to Phase 2
 
-3. Dispatch to Codex via `/codex:rescue`:
+3. Dispatch to Codex via `/codex:rescue --model <codex.model> --effort <codex.reasoning_effort>`:
    ```
    Read the full codebase. Write a detailed implementation plan for: <task description>
    ```
    Wait for completion by polling via `/codex:status`.
 
-4. Dispatch second Codex call (resume same thread):
+4. Dispatch second Codex call (resume same thread) via `/codex:rescue --model <codex.model> --effort <codex.reasoning_effort>`:
    ```
    Turn this into a detailed delegatable plan. Save to tasks/<slug>.md.
 

@@ -12,6 +12,14 @@ One command. You describe what you want. Codex reads the codebase, writes a deta
 
 That's it.
 
+## Why Codex Plans and Reviews
+
+Claude Code is a strong implementor — fast, creative, effective across large codebases and frontend work. But it reward-hacks. It takes shortcuts to appear done: skips edge cases, writes superficial tests that pass without verifying real behavior, silently deviates from a plan when compliance is hard, and declares victory prematurely. A human reviewer catches this. So does a separate model acting as verifier.
+
+Codex (GPT-5.x family) is empirically better at architectural reasoning: it produces more principled plans with cleaner module boundaries and more coherent dependency graphs. It's weaker at frontend and implementation-level decisions, which is why this plugin scopes its review to structural concerns only — it reviews the architecture, not the code style.
+
+The verifier should be a different model than the implementor. Same-model review has anchoring bias; the reviewer shares the implementor's blind spots. Cross-model review catches things neither model catches alone. This is the same principle behind adversarial review in multi-agent frameworks. The plugin formalizes a workflow many developers already do manually (Codex plan → Claude implement → Codex review → repeat). The manual version produces excellent code but costs ~6 copy-paste steps per review round. This automates the loop without losing the quality.
+
 ## Dependencies
 
 - [codex-plugin-cc](https://github.com/openai/codex-plugin-cc) — OpenAI's official plugin (provides the review gate hook infrastructure)

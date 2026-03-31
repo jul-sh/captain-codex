@@ -49,15 +49,15 @@ review_prompt=$("$SCRIPT_DIR/scripts/review-prompt.sh" "$plan_file")
 # ── Dispatch to Codex ──────────────────────────────────────────────────────
 # Read Codex config
 config=$("$SCRIPT_DIR/scripts/config.sh" read)
-codex_model=$(echo "$config" | jq -r '.codex.review_model // .codex.model // "o4-mini"')
-codex_effort=$(echo "$config" | jq -r '.codex.reasoning_effort // "high"')
+codex_model=$(echo "$config" | jq -r '.codex.review_model // .codex.model // "gpt-5.4"')
+codex_effort=$(echo "$config" | jq -r '.codex.reasoning_effort // "xhigh"')
 
 # Use codex CLI to run the review
 # The review prompt is passed via stdin to avoid argument length limits
-review_result=$(echo "$review_prompt" | codex --model "$codex_model" --reasoning-effort "$codex_effort" --quiet 2>/dev/null) || {
+review_result=$(echo "$review_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
   # Codex failed — retry once
   sleep 2
-  review_result=$(echo "$review_prompt" | codex --model "$codex_model" --reasoning-effort "$codex_effort" --quiet 2>/dev/null) || {
+  review_result=$(echo "$review_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
     echo '{"decision": "block", "reason": "Codex review failed after retry. Check codex CLI authentication and try again."}'
     exit 0
   }

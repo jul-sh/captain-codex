@@ -1,7 +1,7 @@
 {
   "codex": {
-    "model": "o4-mini",
-    "reasoning_effort": "high",
+    "model": "gpt-5.4",
+    "reasoning_effort": "xhigh",
     "plan_model": null,
     "review_model": null
   },

@@ -17,8 +17,8 @@ shift
 
 # Read config
 config=$("$SCRIPT_DIR/scripts/config.sh" read)
-codex_model=$(echo "$config" | jq -r '.codex.plan_model // .codex.model // "o4-mini"')
-codex_effort=$(echo "$config" | jq -r '.codex.reasoning_effort // "high"')
+codex_model=$(echo "$config" | jq -r '.codex.plan_model // .codex.model // "gpt-5.4"')
+codex_effort=$(echo "$config" | jq -r '.codex.reasoning_effort // "xhigh"')
 plans_dir=$(echo "$config" | jq -r '.plans.directory // "tasks"')
 filename_template=$(echo "$config" | jq -r '.plans.filename_template // "{{slug}}.md"')
 
@@ -44,10 +44,10 @@ mkdir -p "$plans_dir"
 # ── Codex Call 1: Read codebase and draft plan ────────────────────────────
 plan_prompt=$(cat "$SCRIPT_DIR/templates/plan-prompt.md" | sed "s|{{task_description}}|$task|g")
 
-draft=$(echo "$plan_prompt" | codex --model "$codex_model" --reasoning-effort "$codex_effort" --quiet 2>/dev/null) || {
+draft=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
   echo "ERROR: Codex planning call 1 failed. Retrying..." >&2
   sleep 2
-  draft=$(echo "$plan_prompt" | codex --model "$codex_model" --reasoning-effort "$codex_effort" --quiet 2>/dev/null) || {
+  draft=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
     echo "ERROR: Codex planning call 1 failed after retry." >&2
     exit 1
   }
@@ -81,10 +81,10 @@ $acceptance_criteria
 
 Write the file now."
 
-formalized=$(echo "$formalize_prompt" | codex --model "$codex_model" --reasoning-effort "$codex_effort" --quiet 2>/dev/null) || {
+formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
   echo "ERROR: Codex planning call 2 failed. Retrying..." >&2
   sleep 2
-  formalized=$(echo "$formalize_prompt" | codex --model "$codex_model" --reasoning-effort "$codex_effort" --quiet 2>/dev/null) || {
+  formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
     echo "ERROR: Codex planning call 2 failed after retry." >&2
     exit 1
   }
