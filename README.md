@@ -7,7 +7,7 @@ Claude Code plugin that puts Codex in charge. Codex plans, Claude implements, Co
 One command. You describe what you want. Codex reads the codebase, writes a detailed plan with acceptance criteria, Claude implements it, Codex reviews, Claude addresses feedback, loop repeats until Codex approves. You walk away after the initial command.
 
 ```
-/captain-codex build a maximally principled refactor to unlock a separate iOS app with maximum code sharing
+/captain-codex refactor mac app to enable ios app with code sharing
 ```
 
 That's it.
@@ -30,7 +30,7 @@ The verifier should be a different model than the implementor. Same-model review
 ## Installation
 
 ```bash
-claude plugin install <this-repo-url>
+claude mcp add-plugin captain-codex https://github.com/jul-sh/captain-codex
 ```
 
 ## Commands
