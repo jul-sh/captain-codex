@@ -1,0 +1,38 @@
+{
+  "codex": {
+    "model": "o4-mini",
+    "reasoning_effort": "high",
+    "plan_model": null,
+    "review_model": null
+  },
+  "plans": {
+    "directory": "tasks",
+    "filename_template": "{{slug}}.md"
+  },
+  "max_rounds": 10,
+  "defaults": {
+    "supervised": false,
+    "allow_teams": true
+  },
+  "acceptance_criteria": [
+    "Production ready",
+    "Integration tests passing and covering new code paths",
+    "No imminent follow-up needed",
+    "No TODOs or deferred work",
+    "Architecture reads as if the codebase was designed for this from the beginning"
+  ],
+  "implementation_instructions": [
+    "Work autonomously until fully complete",
+    "Use a team where it makes sense",
+    "Append worklog to the plan file documenting: blockers, tradeoffs, verification status, test results"
+  ],
+  "review_instructions": [
+    "Maximally principled architecture; no expedient shortcuts",
+    "All acceptance criteria in the plan must be met with evidence in the worklog",
+    "Integration tests must exist, pass, and cover new code paths",
+    "No TODOs, deferred work, or follow-up-needed items",
+    "If the worklog shows unresolved blockers, REJECT",
+    "Be demanding; do not approve mediocre work",
+    "When rejecting, write concrete revision instructions, not vague complaints"
+  ]
+}
