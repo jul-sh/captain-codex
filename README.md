@@ -18,7 +18,9 @@ Claude Code is a strong implementor — fast, creative, effective across large c
 
 Codex (GPT-5.x family) is empirically better at architectural reasoning: it produces more principled plans with cleaner module boundaries and more coherent dependency graphs. It's weaker at frontend and implementation-level decisions, which is why this plugin scopes its review to structural concerns only — it reviews the architecture, not the code style.
 
-The verifier should be a different model than the implementor. Same-model review has anchoring bias; the reviewer shares the implementor's blind spots. Cross-model review catches things neither model catches alone. This is the same principle behind adversarial review in multi-agent frameworks. The plugin formalizes a workflow many developers already do manually (Codex plan → Claude implement → Codex review → repeat). The manual version produces excellent code but costs ~6 copy-paste steps per review round. This automates the loop without losing the quality.
+The verifier should be a different model than the implementor. Same-model review has anchoring bias; the reviewer shares the implementor's blind spots. Cross-model review catches things neither model catches alone. This is the same principle behind adversarial review in multi-agent frameworks.
+
+I've been doing this workflow manually for a long time — copying plans from Codex into Claude, copying Claude's output back to Codex for review, pasting the feedback back, repeating until Codex is satisfied. It produces noticeably better code than letting either model work alone. But it costs ~6 copy-paste steps per review round and requires babysitting the whole loop. This plugin automates it.
 
 ## Dependencies
 
