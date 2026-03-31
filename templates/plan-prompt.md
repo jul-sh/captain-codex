@@ -16,3 +16,9 @@ Your plan should include:
 5. **Testing strategy** — What tests to write, what to verify, how to run them.
 
 Be thorough. This plan will be handed to a different AI to implement without your further input. It must be self-contained and unambiguous.
+
+Focus your plan on architectural decisions: module boundaries,
+protocol definitions, dependency directions, shared-code strategy,
+and integration test boundaries. Do NOT prescribe UI frameworks,
+specific libraries, or implementation-level patterns. Leave those
+choices to the implementation agent.

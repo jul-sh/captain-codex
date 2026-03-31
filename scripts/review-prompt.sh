@@ -24,8 +24,13 @@ fi
 # Review instructions from config
 review_instructions=$(echo "$config" | jq -r '.review_instructions[]' | sed 's/^/- /')
 
-# Git diff of current changes
-git_diff=$(git diff HEAD 2>/dev/null || git diff 2>/dev/null || echo "No git diff available")
+# Structural summary of changes (not full diff — keeps Codex focused on architecture)
+BASE="HEAD"
+files_changed=$(git diff --stat "$BASE" 2>/dev/null || echo "No diff available")
+new_modules=$(git diff "$BASE" --name-only --diff-filter=A 2>/dev/null || echo "None")
+arch_changes=$(git diff "$BASE" -- '*.swift' '*.kt' '*.ts' '*.py' '*.go' '*.rs' '*.java' 2>/dev/null | \
+  grep -E '^(@@|protocol |class |struct |import |func .*public|extension |interface |abstract |export |type |trait |pub )' | \
+  head -200 || echo "None")
 
 # Extract worklog section from plan file
 worklog=""
@@ -37,9 +42,22 @@ if [[ -f "$plan_file" ]]; then
   fi
 fi
 
+# Extract pushback section from worklog (between ### Pushback and next ##/### heading, or EOF)
+pushback=""
+if [[ -f "$plan_file" ]]; then
+  pushback=$(sed -n '/^### Pushback/,/^##/ { /^### Pushback/d; /^##/d; p; }' "$plan_file")
+  if [[ -z "$pushback" ]]; then
+    pushback=$(sed -n '/^### Pushback/,$ { /^### Pushback/d; p; }' "$plan_file")
+  fi
+fi
+if [[ -z "$pushback" ]]; then
+  pushback="None"
+fi
+
 # ── Build prompt from template ─────────────────────────────────────────────
 cat <<REVIEW_PROMPT
 You are reviewing an implementation against a plan.
+You are seeing a structural summary, not the full diff. Review at the architectural level only.
 
 ## Plan & Acceptance Criteria
 $plan_contents
@@ -47,13 +65,25 @@ $plan_contents
 ## Review Standards
 $review_instructions
 
-## Changes
-\`\`\`diff
-$git_diff
-\`\`\`
+## Structural Summary
+
+### Files Changed
+$files_changed
+
+### New Modules/Types Introduced
+$new_modules
+
+### Architecture-Relevant Changes (public interfaces, protocols, module boundaries)
+$arch_changes
 
 ## Worklog
 $worklog
+
+## Pushback (if any)
+$pushback
+
+If pushback is present, evaluate it before issuing your verdict.
+Address each pushback item explicitly in your review.
 
 ## Instructions
 Review the implementation against EVERY acceptance criterion in the plan.

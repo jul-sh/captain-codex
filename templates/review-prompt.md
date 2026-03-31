@@ -1,4 +1,5 @@
 You are reviewing an implementation against a plan.
+You are seeing a structural summary, not the full diff. Review at the architectural level only.
 
 ## Plan & Acceptance Criteria
 {{plan_contents}}
@@ -6,13 +7,25 @@ You are reviewing an implementation against a plan.
 ## Review Standards
 {{review_instructions}}
 
-## Changes
-```diff
-{{git_diff}}
-```
+## Structural Summary
+
+### Files Changed
+{{files_changed}}
+
+### New Modules/Types Introduced
+{{new_modules}}
+
+### Architecture-Relevant Changes (public interfaces, protocols, module boundaries)
+{{arch_changes}}
 
 ## Worklog
 {{worklog}}
+
+## Pushback (if any)
+{{pushback}}
+
+If pushback is present, evaluate it before issuing your verdict.
+Address each pushback item explicitly in your review.
 
 ## Instructions
 Review the implementation against EVERY acceptance criterion in the plan.
