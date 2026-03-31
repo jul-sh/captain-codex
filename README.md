@@ -31,8 +31,11 @@ I've been doing this workflow manually for a long time — copying plans from Co
 
 ## Installation
 
-```bash
-claude mcp add-plugin captain-codex https://github.com/jul-sh/captain-codex
+Inside Claude Code:
+
+```
+/plugin marketplace add jul-sh/captain-codex
+/plugin install captain-codex@jul-sh-captain-codex
 ```
 
 ## Commands
