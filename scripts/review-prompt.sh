@@ -24,14 +24,6 @@ fi
 # Review instructions from config
 review_instructions=$(echo "$config" | jq -r '.review_instructions[]' | sed 's/^/- /')
 
-# Structural summary of changes (not full diff — keeps Codex focused on architecture)
-BASE="HEAD"
-files_changed=$(git diff --stat "$BASE" 2>/dev/null || echo "No diff available")
-new_modules=$(git diff "$BASE" --name-only --diff-filter=A 2>/dev/null || echo "None")
-arch_changes=$(git diff "$BASE" -- '*.swift' '*.kt' '*.ts' '*.py' '*.go' '*.rs' '*.java' 2>/dev/null | \
-  grep -E '^(@@|protocol |class |struct |import |func .*public|extension |interface |abstract |export |type |trait |pub )' | \
-  head -200 || echo "None")
-
 # Extract worklog section from plan file
 worklog=""
 if [[ -f "$plan_file" ]]; then
@@ -57,24 +49,17 @@ fi
 # ── Build prompt from template ─────────────────────────────────────────────
 cat <<REVIEW_PROMPT
 You are reviewing an implementation against a plan.
-You are seeing a structural summary, not the full diff. Review at the architectural level only.
+
+Read the codebase to evaluate the implementation against the plan.
+You have full read access to all files.
+Focus on architecture: module boundaries, dependency directions,
+shared-code structure, and integration test coverage of boundaries.
 
 ## Plan & Acceptance Criteria
 $plan_contents
 
 ## Review Standards
 $review_instructions
-
-## Structural Summary
-
-### Files Changed
-$files_changed
-
-### New Modules/Types Introduced
-$new_modules
-
-### Architecture-Relevant Changes (public interfaces, protocols, module boundaries)
-$arch_changes
 
 ## Worklog
 $worklog

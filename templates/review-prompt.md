@@ -1,22 +1,15 @@
 You are reviewing an implementation against a plan.
-You are seeing a structural summary, not the full diff. Review at the architectural level only.
+
+Read the codebase to evaluate the implementation against the plan.
+You have full read access to all files.
+Focus on architecture: module boundaries, dependency directions,
+shared-code structure, and integration test coverage of boundaries.
 
 ## Plan & Acceptance Criteria
 {{plan_contents}}
 
 ## Review Standards
 {{review_instructions}}
-
-## Structural Summary
-
-### Files Changed
-{{files_changed}}
-
-### New Modules/Types Introduced
-{{new_modules}}
-
-### Architecture-Relevant Changes (public interfaces, protocols, module boundaries)
-{{arch_changes}}
 
 ## Worklog
 {{worklog}}
