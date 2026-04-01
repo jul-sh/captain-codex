@@ -47,38 +47,12 @@ if [[ -z "$pushback" ]]; then
 fi
 
 # ── Build prompt from template ─────────────────────────────────────────────
-cat <<REVIEW_PROMPT
-You are reviewing an implementation against a plan.
+template=$(cat "$SCRIPT_DIR/templates/review-prompt.md")
 
-Read the codebase to evaluate the implementation against the plan.
-You have full read access to all files.
-Focus on architecture: module boundaries, dependency directions,
-shared-code structure, and integration test coverage of boundaries.
+# Substitute placeholders
+prompt="${template//\{\{plan_contents\}\}/$plan_contents}"
+prompt="${prompt//\{\{review_instructions\}\}/$review_instructions}"
+prompt="${prompt//\{\{worklog\}\}/$worklog}"
+prompt="${prompt//\{\{pushback\}\}/$pushback}"
 
-## Plan & Acceptance Criteria
-$plan_contents
-
-## Review Standards
-$review_instructions
-
-## Worklog
-$worklog
-
-## Pushback (if any)
-$pushback
-
-If pushback is present, evaluate it before issuing your verdict.
-Address each pushback item explicitly in your review.
-
-## Instructions
-Review the implementation against EVERY acceptance criterion in the plan.
-For each criterion, state whether it is MET or NOT MET with specific evidence.
-
-If ANY criterion is not met, or if the review standards are violated:
-- Output: VERDICT: REJECT
-- Write concrete, specific revision instructions. Reference file paths and line numbers.
-- Do NOT give vague feedback like "needs improvement."
-
-If ALL criteria are met:
-- Output: VERDICT: APPROVE
-REVIEW_PROMPT
+echo "$prompt"

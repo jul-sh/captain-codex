@@ -35,60 +35,61 @@ slug=$(echo "$task" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed '
 plan_filename=$(echo "$filename_template" | sed "s/{{slug}}/$slug/g")
 plan_path="$plans_dir/$plan_filename"
 
-# Build acceptance criteria string
-acceptance_criteria=$(echo "$config" | jq -r '.acceptance_criteria[]' | sed 's/^/- [ ] /')
+# Build plan instructions string
+plan_instructions=$(echo "$config" | jq -r '.plan_instructions[]' | sed 's/^/- /')
 
 # Ensure tasks directory exists
 mkdir -p "$plans_dir"
 
 # ── Codex Call 1: Read codebase and draft plan ────────────────────────────
-plan_prompt=$(cat "$SCRIPT_DIR/templates/plan-prompt.md" | sed "s|{{task_description}}|$task|g")
+plan_prompt=$(cat "$SCRIPT_DIR/templates/plan-prompt.md")
+plan_prompt="${plan_prompt//\{\{task_description\}\}/$task}"
+plan_prompt="${plan_prompt//\{\{plan_instructions\}\}/$plan_instructions}"
 
-draft=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+json_output=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --json 2>/dev/null) || {
   echo "ERROR: Codex planning call 1 failed. Retrying..." >&2
   sleep 2
-  draft=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+  json_output=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --json 2>/dev/null) || {
     echo "ERROR: Codex planning call 1 failed after retry." >&2
     exit 1
   }
 }
 
-# ── Codex Call 2: Formalize into delegatable plan ─────────────────────────
-formalize_prompt="Based on the plan you just drafted, create a formal delegatable implementation plan.
+# Extract session ID from JSON Lines output
+session_id=$(echo "$json_output" | jq -r 'select(.type == "thread.started") | .session_id // empty' | head -1)
+if [[ -z "$session_id" ]]; then
+  # Fallback: try other event shapes
+  session_id=$(echo "$json_output" | jq -r 'select(.session_id) | .session_id' | head -1)
+fi
 
-Save it to: $plan_path
+if [[ -z "$session_id" ]]; then
+  echo "WARNING: Could not extract session ID from Codex output." >&2
+fi
 
-The plan file must include these sections:
-# $task
-
-## Overview
-<high-level description of the goal and approach>
-
-## Scope
-<what is in scope and what is explicitly out of scope>
-
-## Implementation Steps
-<numbered, detailed steps with file-by-file changes where applicable>
-
-## Edge Cases & Pitfalls
-<things to watch out for>
-
-## Acceptance Criteria
-$acceptance_criteria
-
-## Worklog
-<empty — to be filled during implementation>
+# ── Codex Call 2: Resume session to formalize plan ───────────────────────
+formalize_prompt="Formalize your plan into a delegatable implementation plan and save it to: $plan_path
 
 Write the file now."
 
-formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
-  echo "ERROR: Codex planning call 2 failed. Retrying..." >&2
-  sleep 2
-  formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
-    echo "ERROR: Codex planning call 2 failed after retry." >&2
-    exit 1
+if [[ -n "$session_id" ]]; then
+  formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+    echo "ERROR: Codex planning call 2 failed. Retrying..." >&2
+    sleep 2
+    formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+      echo "ERROR: Codex planning call 2 failed after retry." >&2
+      exit 1
+    }
   }
-}
+else
+  formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+    echo "ERROR: Codex planning call 2 failed. Retrying..." >&2
+    sleep 2
+    formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+      echo "ERROR: Codex planning call 2 failed after retry." >&2
+      exit 1
+    }
+  }
+fi
 
 # ── Verify plan file was created ──────────────────────────────────────────
 if [[ ! -f "$plan_path" ]]; then
@@ -97,9 +98,6 @@ if [[ ! -f "$plan_path" ]]; then
   exit 1
 fi
 
-# Verify it has acceptance criteria
-if ! grep -q "Acceptance Criteria" "$plan_path"; then
-  echo "WARNING: Plan file missing Acceptance Criteria section." >&2
-fi
 
-echo "$plan_path"
+# Output plan path and session ID (tab-separated)
+echo "${plan_path}	${session_id:-}"

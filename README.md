@@ -42,26 +42,18 @@ Inside Claude Code:
 |---------|-------------|
 | `/captain-codex <task>` | Full pipeline: plan, implement, review loop |
 | `/captain-codex:status` | Current phase, round, review history |
-| `/captain-codex:instructions` | View/edit Codex review instructions |
+| `/captain-codex:instructions` | View/edit plan, implementation, and review instructions |
 | `/captain-codex:config` | View/edit plugin config |
 
-## Flags
-
-| Flag | Description |
-|------|-------------|
-| `--plan-only` | Stop after planning; output plan for review |
-| `--skip-plan <path>` | Use existing plan file; skip planning |
-| `--no-team` | No subagent teams during implementation |
-| `--max-rounds <n>` | Cap review iterations (default: 10) |
-| `--supervised` | Pause after planning for human approval |
+Flags: `--skip-plan <path>`, `--max-rounds <n>`, `--supervised`.
 
 ## How It Works
 
-**Planning.** Codex reads the codebase and writes an implementation plan with acceptance criteria. Saved to `tasks/<slug>.md`.
+**Planning.** Codex reads the codebase and writes an implementation plan. Saved to `tasks/<slug>.md`.
 
 **Implementation.** Claude receives the plan and implements autonomously, maintaining a worklog in the plan file.
 
-**Review loop.** When Claude finishes, a Stop hook fires Codex to review against the acceptance criteria. Rejected; Claude gets feedback and continues. Approved; done. Max rounds exceeded; you decide.
+**Review loop.** When Claude finishes, a Stop hook resumes the Codex planning session for review. Rejected; Claude gets feedback and continues. Approved; done. Max rounds exceeded; you decide.
 
 ## Configuration
 

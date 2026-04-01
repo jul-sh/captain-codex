@@ -10,56 +10,18 @@
     "filename_template": "{{slug}}.md"
   },
   "max_rounds": 10,
-  "defaults": {
-    "supervised": false,
-    "allow_teams": true
-  },
-  "acceptance_criteria": [
-    "Production ready",
-    "Integration tests passing and covering new code paths",
-    "No imminent follow-up needed",
-    "No TODOs or deferred work",
-    "Architecture reads as if the codebase was designed for this from the beginning"
-  ],
+  "plan_instructions": [""],
   "implementation_instructions": [
-    "Work autonomously until fully complete",
-    "Use a team where it makes sense",
-    "Append worklog to the plan file documenting: blockers, tradeoffs, verification status, test results"
+    "Comprehensively, completely, and robustly implement the plan above. Do not cease until it is entirely implemented, production ready.",
+    "Work autonomously. Use a team where it makes sense.",
+    "Maintain a ## Worklog section in the plan file. Log what you did, blockers, tradeoffs, and test results as you go.",
+    "If you strongly feel the plan's architecture is wrong, document a ### Pushback in the worklog with concrete evidence (not preference) and your proposed alternative. You may implement the alternative if you document it."
   ],
   "review_instructions": [
-    "You are reviewing ARCHITECTURE, not implementation details.",
-    "REVIEW these concerns:",
-    "  - Does the implementation match the plan's module boundaries and separation of concerns?",
-    "  - Are shared-code boundaries correct; will this actually work for both platform targets?",
-    "  - Are data flows and dependency directions principled, or are there shortcuts that create coupling?",
-    "  - Do the integration tests cover the architectural boundaries (not just unit-level)?",
-    "  - Are the acceptance criteria from the plan met with evidence in the worklog?",
-    "  - Are there architectural decisions that deviate from the plan without justification?",
-    "",
-    "DO NOT REVIEW or comment on:",
-    "  - Code style, formatting, naming conventions",
-    "  - Choice of UI framework, UI library, or frontend implementation details",
-    "  - Individual function implementations; trust the implementation agent's judgment at this level",
-    "  - Test implementation details; only care whether architectural boundaries are tested",
-    "  - Performance micro-optimizations",
-    "  - Any concern that wouldn't appear in an architecture review with a senior engineer",
-    "",
-    "When rejecting, your feedback must reference the PLAN, not your own preferences.",
-    "If the implementation deviated from the plan's architecture: REJECT with specific structural concern.",
-    "If the implementation followed the plan but you would have chosen a different library or pattern: APPROVE.",
-    "Your job is to enforce the plan, not rewrite it.",
-    "",
-    "CHECK THE PUSHBACK SECTION of the worklog before issuing a verdict.",
-    "If the implementation agent raised a pushback with concrete evidence:",
-    "  - Evaluate whether the concern is structurally valid",
-    "  - If valid: APPROVE the deviation and note that the plan should be updated",
-    "  - If invalid: REJECT and explain why the plan's approach is still correct",
-    "  - Do not dismiss pushback without addressing the specific evidence cited",
-    "",
-    "The implementation agent may deviate from the plan IF AND ONLY IF:",
-    "  - The deviation is documented in the pushback section",
-    "  - The evidence is concrete (not preference-based)",
-    "  - The proposed alternative maintains the plan's architectural goals",
-    "A well-evidenced deviation is better than blind compliance with a broken plan."
+    "Review this implementation against the plan you wrote. You have full read access to the codebase.",
+    "Review architecture, not implementation details: module boundaries, dependency directions, shared-code structure, integration test coverage.",
+    "Ignore code style, library choices, UI details, and micro-optimizations.",
+    "Enforce the plan; reject for structural deviations, not personal preference.",
+    "Evaluate any pushback; accept well-evidenced deviations from the plan."
   ]
 }

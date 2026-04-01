@@ -26,6 +26,8 @@ fi
 plan_file=$(jq -r '.plan_file' "$STATE_FILE")
 max_rounds=$(jq -r '.max_rounds // 10' "$STATE_FILE")
 current_round=$(jq -r '.round // 0' "$STATE_FILE")
+session_id=$(jq -r '.codex_session_id // empty' "$STATE_FILE")
+supervised=$(jq -r '.supervised // false' "$STATE_FILE")
 next_round=$((current_round + 1))
 
 # ── Max rounds check ───────────────────────────────────────────────────────
@@ -52,12 +54,17 @@ config=$("$SCRIPT_DIR/scripts/config.sh" read)
 codex_model=$(echo "$config" | jq -r '.codex.review_model // .codex.model // "gpt-5.4"')
 codex_effort=$(echo "$config" | jq -r '.codex.reasoning_effort // "xhigh"')
 
-# Use codex CLI to run the review
-# The review prompt is passed via stdin to avoid argument length limits
-review_result=$(echo "$review_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+# Use codex CLI to run the review, resuming the planning session if available
+codex_cmd=(codex exec)
+if [[ -n "$session_id" ]]; then
+  codex_cmd+=(resume "$session_id")
+fi
+codex_cmd+=(-m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet)
+
+review_result=$(echo "$review_prompt" | "${codex_cmd[@]}" 2>/dev/null) || {
   # Codex failed — retry once
   sleep 2
-  review_result=$(echo "$review_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+  review_result=$(echo "$review_prompt" | "${codex_cmd[@]}" 2>/dev/null) || {
     echo '{"decision": "block", "reason": "Codex review failed after retry. Check codex CLI authentication and try again."}'
     exit 0
   }
@@ -89,19 +96,32 @@ jq --argjson entry "$review_entry" \
   "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
 # ── Return decision ────────────────────────────────────────────────────────
+escaped_reason=$(echo "$review_result" | jq -Rs '.')
+
 if [[ "$verdict" == "APPROVE" ]]; then
-  # Mark run as complete
-  jq '.active = false | .phase = "complete"' \
-    "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  if [[ "$supervised" == "true" ]]; then
+    # In supervised mode, block so the user sees the approval and confirms
+    jq '.phase = "approved_pending"' \
+      "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
-  echo '{"decision": "allow"}'
+    echo "{\"decision\": \"block\", \"reason\": $(jq -Rs '.' <<< "Codex APPROVED (round $next_round). Review output:\n\n$review_result\n\nSupervised mode: confirm approval by running /captain-codex:status and allowing the stop, or continue implementing.")}"
+  else
+    jq '.active = false | .phase = "complete"' \
+      "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+
+    echo '{"decision": "allow"}'
+  fi
 else
-  # Back to implementing phase for the next iteration
-  jq '.phase = "implementing"' \
-    "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  if [[ "$supervised" == "true" ]]; then
+    # In supervised mode, present the rejection for user review before continuing
+    jq '.phase = "rejected_pending"' \
+      "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
-  # Escape the review result for JSON
-  escaped_reason=$(echo "$review_result" | jq -Rs '.')
+    echo "{\"decision\": \"block\", \"reason\": $(jq -Rs '.' <<< "Codex REJECTED (round $next_round). Review output:\n\n$review_result\n\nSupervised mode: review the feedback above. To continue implementing with this feedback, just proceed. To abort, run /captain-codex:status.")}"
+  else
+    jq '.phase = "implementing"' \
+      "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
-  echo "{\"decision\": \"block\", \"reason\": ${escaped_reason}}"
+    echo "{\"decision\": \"block\", \"reason\": ${escaped_reason}}"
+  fi
 fi
