@@ -1,7 +1,5 @@
 {
   "name": "captain-codex",
-  "description": "Codex plans, Claude implements, Codex reviews.",
-  "version": "0.2.0",
   "owner": {
     "name": "Juliette Pluto"
   },
@@ -11,11 +9,7 @@
       "source": {
         "source": "github",
         "repo": "jul-sh/captain-codex"
-      },
-      "description": "Codex plans, Claude implements, Codex reviews. One command.",
-      "version": "0.2.0",
-      "license": "MIT",
-      "repository": "https://github.com/jul-sh/captain-codex"
+      }
     }
   ]
 }
