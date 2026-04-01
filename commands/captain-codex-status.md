@@ -1,3 +1,7 @@
+---
+description: "Show current phase, round, and review history."
+---
+
 # /captain-codex:status
 
 Shows current pipeline state for an active captain-codex run.

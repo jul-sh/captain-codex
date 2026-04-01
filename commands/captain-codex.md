@@ -1,3 +1,8 @@
+---
+description: "Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied."
+argument-hint: "<task description>"
+---
+
 # /captain-codex
 
 Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.

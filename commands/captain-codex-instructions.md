@@ -1,3 +1,7 @@
+---
+description: "View or edit plan, implementation, and review instructions."
+---
+
 # /captain-codex:instructions
 
 View or edit the instructions injected into each phase's prompt.

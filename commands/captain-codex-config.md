@@ -1,3 +1,7 @@
+---
+description: "View or edit plugin configuration."
+---
+
 # /captain-codex:config
 
 View or edit plugin configuration.
