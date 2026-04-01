@@ -1,0 +1,18 @@
+{
+  "name": "captain-codex",
+  "description": "Codex plans, Claude implements, Codex reviews.",
+  "version": "0.1.0",
+  "owner": {
+    "name": "Juliette Pluto"
+  },
+  "plugins": [
+    {
+      "name": "captain-codex",
+      "source": ".",
+      "description": "Codex plans, Claude implements, Codex reviews. One command.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "repository": "https://github.com/jul-sh/captain-codex"
+    }
+  ]
+}

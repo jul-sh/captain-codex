@@ -39,7 +39,7 @@ Inside Claude Code:
 
 ```
 /plugin marketplace add jul-sh/captain-codex
-/plugin install captain-codex@jul-sh-captain-codex
+/plugin install captain-codex@captain-codex
 ```
 
 ## Commands
