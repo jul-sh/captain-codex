@@ -10,18 +10,20 @@
     "filename_template": "{{slug}}.md"
   },
   "max_rounds": 10,
-  "plan_instructions": [""],
+  "plan_instructions": [
+    "Write a maximally principled plan to accomplish the task."
+  ],
   "implementation_instructions": [
-    "Comprehensively, completely, and robustly implement the plan above. Do not cease until it is entirely implemented, production ready.",
+    "Comprehensively, completely, and robustly implement the plan above. Do not cease until it is entirely implemented.",
     "Work autonomously. Use a team where it makes sense.",
     "Maintain a ## Worklog section in the plan file. Log what you did, blockers, tradeoffs, and test results as you go.",
     "If you strongly feel the plan's architecture is wrong, document a ### Pushback in the worklog with concrete evidence (not preference) and your proposed alternative. You may implement the alternative if you document it."
   ],
   "review_instructions": [
-    "Review this implementation against the plan you wrote. You have full read access to the codebase.",
-    "Review architecture, not implementation details: module boundaries, dependency directions, shared-code structure, integration test coverage.",
+    "Review this implementation against the plan.",
+    "Consider architecture: module boundaries, dependency directions, shared-code structure, integration test coverage.",
     "Ignore code style, library choices, UI details, and micro-optimizations.",
-    "Enforce the plan; reject for structural deviations, not personal preference.",
-    "Evaluate any pushback; accept well-evidenced deviations from the plan."
+    "Enforce the plan; reject for structural deviations or incomplete implementations.",
+    "Evaluate any pushback; accept well-evidenced deviations from the plan only if you confident they make sense."
   ]
 }

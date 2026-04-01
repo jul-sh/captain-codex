@@ -4,11 +4,17 @@ Claude Code plugin that puts Codex in charge. Codex plans, Claude implements, Co
 
 ## What It Does
 
-One command. You describe what you want. Codex writes a plan, Claude implements it, Codex reviews, Claude fixes, repeat until approved.
+One command. You describe what you want; include ad-hoc instructions for any phase in natural language.
 
 ```
 /captain-codex refactor mac app to enable ios app with code sharing
 ```
+
+```
+/captain-codex refactor auth module. for planning, focus on backwards compat. when implementing, don't touch the database layer. reviewer should be strict about test coverage.
+```
+
+Ad-hoc instructions are merged with your configured defaults for each phase.
 
 ## Why
 
@@ -49,13 +55,25 @@ Flags: `--skip-plan <path>`, `--max-rounds <n>`, `--supervised`.
 
 ## How It Works
 
-**Planning.** Codex reads the codebase and writes an implementation plan. Saved to `tasks/<slug>.md`.
+**Planning.** Codex reads the codebase and writes an implementation plan. Saved to `tasks/<slug>.md`. Reviews happen in the same Codex session, so Codex retains full context of the plan it wrote.
 
 **Implementation.** Claude receives the plan and implements autonomously, maintaining a worklog in the plan file.
 
 **Review loop.** When Claude finishes, a Stop hook resumes the Codex planning session for review. Rejected; Claude gets feedback and continues. Approved; done. Max rounds exceeded; you decide.
 
+**Supervised mode.** `--supervised` pauses after planning and after each review round for human approval.
+
 ## Configuration
+
+Three instruction sets control what each phase does:
+
+| Config key | Controls |
+|---|---|
+| `plan_instructions` | What Codex should focus on when planning |
+| `implementation_instructions` | How Claude should implement |
+| `review_instructions` | What Codex should check during review |
+
+Edit via `/captain-codex:instructions` or directly in config files.
 
 User-level: `~/.claude-architect/config.json`
 Project-level override: `.claude-architect/config.json`

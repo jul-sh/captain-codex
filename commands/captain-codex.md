@@ -5,7 +5,7 @@ Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
 ## Usage
 
 ```
-/captain-codex <task description>
+/captain-codex <task description and any ad-hoc instructions>
 /captain-codex --skip-plan <path> <task description>
 ```
 
@@ -17,35 +17,49 @@ Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
 
 ## Behavior
 
+### Parsing Input
+
+Parse flags from the user's input. Everything else is natural language.
+
+The user may include ad-hoc instructions for any phase inline. Look for cues like "for planning...", "when implementing...", "for review...", "the reviewer should...", "the planner should...", "make sure to...", or similar natural language directing a specific phase.
+
+Extract:
+- **task description** — the core task
+- **ad-hoc plan instructions** — anything directing the planning phase
+- **ad-hoc implementation instructions** — anything directing the implementation phase
+- **ad-hoc review instructions** — anything directing the review phase
+
+Read config using `scripts/config.sh read`. For each phase, merge ad-hoc instructions (if any) with the config values by appending the ad-hoc instructions to the config array.
+
 ### Phase 1: Planning
 
-1. Read config using `scripts/config.sh read`.
+1. If `--skip-plan <path>` was provided, verify the plan file exists and skip to Phase 2.
 
-2. If `--skip-plan <path>` was provided, verify the plan file exists and skip to Phase 2.
+2. Run `scripts/plan.sh "<task description>"`. Before calling, write the merged plan instructions into a temporary config override if ad-hoc plan instructions were provided. The script outputs a tab-separated line: `<plan_path>\t<session_id>`. Parse both values.
 
-3. Run `scripts/plan.sh "<task description>"`. It outputs a tab-separated line: `<plan_path>\t<session_id>`. Parse both values.
+3. Verify the plan file exists. If missing, retry once, then report failure.
 
-4. Verify the plan file exists. If missing, retry once, then report failure.
+4. If `--supervised` was specified: present the plan and ask for confirmation before continuing.
 
-5. If `--supervised` was specified: present the plan and ask for confirmation before continuing.
-
-6. Initialize state tracking:
+5. Initialize state tracking:
    ```bash
    scripts/config.sh init-state "<task description>" "<plan file path>" <max_rounds> "<session_id>" <true|false for --supervised>
    ```
 
 ### Phase 2: Implementation
 
-Read the plan file and `templates/implement-prompt.md`. Read config to get `implementation_instructions`.
+Read the plan file and `templates/implement-prompt.md`.
 
 Substitute the placeholders in the template:
 - `{{plan_contents}}` → contents of the plan file
-- `{{implementation_instructions}}` → from config
+- `{{implementation_instructions}}` → merged config + ad-hoc implementation instructions, joined by newlines
 - `{{plan_file}}` → path to the plan file
 
 Execute the resulting prompt.
 
 The review gate hook fires automatically when implementation tries to stop. It resumes the Codex planning session to review, and blocks or allows the stop based on the verdict. The loop continues until Codex approves or max rounds (from config) is hit.
+
+Note: ad-hoc review instructions need to be available to the hook. Write them to `.claude-architect/state.json` under an `adhoc_review_instructions` key during init-state so the hook can merge them with the config values.
 
 ### Phase 3: Completion
 

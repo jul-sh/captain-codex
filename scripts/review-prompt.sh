@@ -24,6 +24,16 @@ fi
 # Review instructions from config
 review_instructions=$(echo "$config" | jq -r '.review_instructions[]' | sed 's/^/- /')
 
+# Merge ad-hoc review instructions from state if present
+STATE_FILE=".claude-architect/state.json"
+if [[ -f "$STATE_FILE" ]]; then
+  adhoc=$(jq -r '.adhoc_review_instructions // empty' "$STATE_FILE")
+  if [[ -n "$adhoc" ]]; then
+    review_instructions="${review_instructions}
+- ${adhoc}"
+  fi
+fi
+
 # Extract worklog section from plan file
 worklog=""
 if [[ -f "$plan_file" ]]; then

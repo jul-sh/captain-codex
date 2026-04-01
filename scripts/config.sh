@@ -63,6 +63,7 @@ init_state() {
   local max_rounds="${3:-10}"
   local session_id="${4:-}"
   local supervised="${5:-false}"
+  local adhoc_review="${6:-}"
 
   mkdir -p "$(dirname "$STATE_FILE")"
 
@@ -72,6 +73,7 @@ init_state() {
     --argjson max "$max_rounds" \
     --arg session "${session_id:-null}" \
     --argjson supervised "$supervised" \
+    --arg adhoc_review "$adhoc_review" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{
       active: true,
@@ -82,6 +84,7 @@ init_state() {
       max_rounds: $max,
       supervised: $supervised,
       codex_session_id: (if $session == "null" or $session == "" then null else $session end),
+      adhoc_review_instructions: (if $adhoc_review == "" then null else $adhoc_review end),
       review_history: [],
       started_at: $ts
     }' > "$STATE_FILE"
