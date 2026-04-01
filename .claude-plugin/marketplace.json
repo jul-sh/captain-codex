@@ -8,7 +8,10 @@
   "plugins": [
     {
       "name": "captain-codex",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "jul-sh/captain-codex"
+      },
       "description": "Codex plans, Claude implements, Codex reviews. One command.",
       "version": "0.1.0",
       "license": "MIT",
