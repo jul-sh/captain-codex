@@ -1,13 +1,5 @@
 {
   "name": "captain-codex",
   "version": "0.1.0",
-  "description": "Codex plans, Claude implements, Codex reviews. One command.",
-  "commands": [
-    {"name": "captain-codex", "file": "commands/captain-codex.md"},
-    {"name": "captain-codex:status", "file": "commands/captain-codex-status.md"},
-    {"name": "captain-codex:instructions", "file": "commands/captain-codex-instructions.md"},
-    {"name": "captain-codex:config", "file": "commands/captain-codex-config.md"}
-  ],
-  "hooks": "hooks.json",
-  "dependencies": ["codex-plugin-cc"]
+  "description": "Codex plans, Claude implements, Codex reviews. One command."
 }

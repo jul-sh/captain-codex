@@ -1,9 +1,0 @@
-{
-  "hooks": [
-    {
-      "event": "Stop",
-      "script": "hooks/review-gate.sh",
-      "timeout_ms": 600000
-    }
-  ]
-}
