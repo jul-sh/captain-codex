@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # captain-codex review gate — Stop hook
 # Dispatches an augmented Codex review when Claude tries to stop during an active run.
-# Returns {"decision": "block", "reason": "..."} to reject or {"decision": "allow"} to approve.
+# Returns {"decision": "block", "reason": "..."} to reject or {"decision": "approve"} to approve.
 
 set -euo pipefail
 
@@ -10,7 +10,7 @@ STATE_FILE=".claude-architect/state.json"
 
 # ── Guard: only act during an active captain-codex run ──────────────────────
 if [[ ! -f "$STATE_FILE" ]]; then
-  echo '{"decision": "allow"}'
+  echo '{"decision": "approve"}'
   exit 0
 fi
 
@@ -18,7 +18,7 @@ active=$(jq -r '.active // false' "$STATE_FILE")
 phase=$(jq -r '.phase // ""' "$STATE_FILE")
 
 if [[ "$active" != "true" ]] || [[ "$phase" != "implementing" && "$phase" != "review" ]]; then
-  echo '{"decision": "allow"}'
+  echo '{"decision": "approve"}'
   exit 0
 fi
 
@@ -109,7 +109,7 @@ if [[ "$verdict" == "APPROVE" ]]; then
     jq '.active = false | .phase = "complete"' \
       "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
-    echo '{"decision": "allow"}'
+    echo '{"decision": "approve"}'
   fi
 else
   if [[ "$supervised" == "true" ]]; then
