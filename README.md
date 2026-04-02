@@ -20,11 +20,9 @@ Ad-hoc instructions are merged with your configured defaults for each phase.
 
 Claude is a strong implementor; fast, creative, good across large codebases. But it reward-hacks. It takes shortcuts to look done: skips edge cases, writes tests that pass without verifying behavior, deviates from plans when compliance is hard, declares victory early. You need a separate verifier.
 
-Codex is better at architectural reasoning; cleaner module boundaries, more principled dependency graphs. It's weaker at frontend and implementation details, so the plugin scopes its review to structure only.
+Codex is better at architectural reasoning; cleaner module boundaries, more principled dependency graphs. The verifier should be a different model than the implementor. Same-model review has anchoring bias; the reviewer shares the implementor's blind spots. Cross-model review catches things neither catches alone.
 
-The verifier should be a different model. Same-model review has anchoring bias; the reviewer shares the implementor's blind spots. Cross-model review catches things neither catches alone.
-
-I've been doing this manually for a long time; copying plans from Codex to Claude, pasting output back for review, feeding feedback in, repeating. It produces noticeably better code than either model alone. But it's ~6 copy-paste steps per round and you have to babysit the whole loop. This plugin automates it.
+I've been doing this manually for a long time; copying plans from Codex to Claude, pasting output back for review, feeding feedback in, repeating. It produces noticeably better code than either model alone. But you have to babysit the whole loop. This plugin automates it.
 
 ## Dependencies
 
