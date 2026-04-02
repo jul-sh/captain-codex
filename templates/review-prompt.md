@@ -4,9 +4,6 @@
 ## Worklog
 {{worklog}}
 
-## Pushback
-{{pushback}}
-
 ## Instructions
 {{review_instructions}}
 

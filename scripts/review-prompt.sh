@@ -44,18 +44,6 @@ if [[ -f "$plan_file" ]]; then
   fi
 fi
 
-# Extract pushback section from worklog (between ### Pushback and next ##/### heading, or EOF)
-pushback=""
-if [[ -f "$plan_file" ]]; then
-  pushback=$(sed -n '/^### Pushback/,/^##/ { /^### Pushback/d; /^##/d; p; }' "$plan_file")
-  if [[ -z "$pushback" ]]; then
-    pushback=$(sed -n '/^### Pushback/,$ { /^### Pushback/d; p; }' "$plan_file")
-  fi
-fi
-if [[ -z "$pushback" ]]; then
-  pushback="None"
-fi
-
 # ── Build prompt from template ─────────────────────────────────────────────
 template=$(cat "$SCRIPT_DIR/templates/review-prompt.md")
 
@@ -63,6 +51,5 @@ template=$(cat "$SCRIPT_DIR/templates/review-prompt.md")
 prompt="${template//\{\{plan_contents\}\}/$plan_contents}"
 prompt="${prompt//\{\{review_instructions\}\}/$review_instructions}"
 prompt="${prompt//\{\{worklog\}\}/$worklog}"
-prompt="${prompt//\{\{pushback\}\}/$pushback}"
 
 echo "$prompt"
