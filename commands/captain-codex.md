@@ -20,6 +20,10 @@ Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
 - `--max-rounds <n>` — Cap review iterations (default: from config)
 - `--supervised` — Pause after planning and after each review for human approval
 
+## Important: Timeouts
+
+All Bash calls to codex scripts (`scripts/plan.sh`, `scripts/config.sh`, and any `codex exec` invocations) can take a long time. **Always use a 45-minute timeout (2700000ms)** for these calls by setting the `timeout` parameter on the Bash tool.
+
 ## Behavior
 
 ### Parsing Input
