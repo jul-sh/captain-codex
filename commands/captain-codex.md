@@ -20,9 +20,9 @@ Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
 - `--max-rounds <n>` — Cap review iterations (default: from config)
 - `--supervised` — Pause after planning and after each review for human approval
 
-## Important: Timeouts
+## CRITICAL — Bash Timeout
 
-All Bash calls to codex scripts (`${CLAUDE_PLUGIN_ROOT}/scripts/plan.sh`, `${CLAUDE_PLUGIN_ROOT}/scripts/config.sh`, and any `codex exec` invocations) can take a long time. **Always use a 45-minute timeout (2700000ms)** for these calls by setting the `timeout` parameter on the Bash tool.
+**YOU MUST set `timeout: 2700000` on EVERY Bash tool call in this skill.** This includes `plan.sh`, `config.sh`, `codex exec`, and any other shell command. The default 2-minute timeout is far too short — these commands routinely run 10–30 minutes. If you use the default timeout, the command WILL be killed mid-run and the user's work will be lost. There are NO exceptions.
 
 ## Behavior
 

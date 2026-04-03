@@ -6,7 +6,7 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/review-gate.sh",
-            "timeout": 600000
+            "timeout": 2700000
           }
         ]
       }
