@@ -55,11 +55,11 @@ json_output=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reaso
   }
 }
 
-# Extract session ID from JSON Lines output
-session_id=$(echo "$json_output" | jq -r 'select(.type == "thread.started") | .session_id // empty' | head -1)
+# Extract thread ID from JSON Lines output
+session_id=$(echo "$json_output" | jq -r 'select(.type == "thread.started") | .thread_id // empty' | head -1)
 if [[ -z "$session_id" ]]; then
   # Fallback: try other event shapes
-  session_id=$(echo "$json_output" | jq -r 'select(.session_id) | .session_id' | head -1)
+  session_id=$(echo "$json_output" | jq -r 'select(.thread_id) | .thread_id' | head -1)
 fi
 
 if [[ -z "$session_id" ]]; then
@@ -72,19 +72,19 @@ formalize_prompt="Formalize your plan into a delegatable implementation plan and
 Write the file now."
 
 if [[ -n "$session_id" ]]; then
-  formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+  formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
     echo "ERROR: Codex planning call 2 failed. Retrying..." >&2
     sleep 2
-    formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+    formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
       echo "ERROR: Codex planning call 2 failed after retry." >&2
       exit 1
     }
   }
 else
-  formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+  formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
     echo "ERROR: Codex planning call 2 failed. Retrying..." >&2
     sleep 2
-    formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --quiet 2>/dev/null) || {
+    formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
       echo "ERROR: Codex planning call 2 failed after retry." >&2
       exit 1
     }
