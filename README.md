@@ -33,10 +33,15 @@ I've been doing this manually for a long time; copying plans from Codex to Claud
 
 ## Installation
 
-Inside Claude Code:
+This plugin is available through the [jul-sh Claude Code plugin marketplace](https://github.com/jul-sh/claude-plugins).
 
+### Add the marketplace:
 ```
-/plugin marketplace add jul-sh/captain-codex
+/plugin marketplace add jul-sh/claude-plugins
+```
+
+### Install the plugin:
+```
 /plugin install captain-codex@jul-sh
 ```
 
