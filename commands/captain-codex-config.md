@@ -24,14 +24,14 @@ View or edit plugin configuration.
 
 ### View (no arguments)
 
-1. Read config via `scripts/config.sh read`.
+1. Read config via `${CLAUDE_PLUGIN_ROOT}/scripts/config.sh read`.
 2. Display all configuration in a readable format, including codex settings, plan settings, max_rounds, and the three instruction sets.
 3. Indicate which values come from project-level overrides vs user-level config.
 
 ### Set (key + value)
 
 1. Parse the dot-notation key (e.g., `codex.model` → `{"codex": {"model": ...}}`).
-2. Write via `scripts/config.sh write <key> <value>`.
+2. Write via `${CLAUDE_PLUGIN_ROOT}/scripts/config.sh write <key> <value>`.
 3. Confirm the change.
 
 **Supported keys:**

@@ -22,7 +22,7 @@ Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
 
 ## Important: Timeouts
 
-All Bash calls to codex scripts (`scripts/plan.sh`, `scripts/config.sh`, and any `codex exec` invocations) can take a long time. **Always use a 45-minute timeout (2700000ms)** for these calls by setting the `timeout` parameter on the Bash tool.
+All Bash calls to codex scripts (`${CLAUDE_PLUGIN_ROOT}/scripts/plan.sh`, `${CLAUDE_PLUGIN_ROOT}/scripts/config.sh`, and any `codex exec` invocations) can take a long time. **Always use a 45-minute timeout (2700000ms)** for these calls by setting the `timeout` parameter on the Bash tool.
 
 ## Behavior
 
@@ -38,13 +38,13 @@ Extract:
 - **ad-hoc implementation instructions** — anything directing the implementation phase
 - **ad-hoc review instructions** — anything directing the review phase
 
-Read config using `scripts/config.sh read`. For each phase, merge ad-hoc instructions (if any) with the config values by appending the ad-hoc instructions to the config array.
+Read config using `${CLAUDE_PLUGIN_ROOT}/scripts/config.sh read`. For each phase, merge ad-hoc instructions (if any) with the config values by appending the ad-hoc instructions to the config array.
 
 ### Phase 1: Planning
 
 1. If `--skip-plan <path>` was provided, verify the plan file exists and skip to Phase 2.
 
-2. Run `scripts/plan.sh "<task description>"`. Before calling, write the merged plan instructions into a temporary config override if ad-hoc plan instructions were provided. The script outputs a tab-separated line: `<plan_path>\t<session_id>`. Parse both values.
+2. Run `${CLAUDE_PLUGIN_ROOT}/scripts/plan.sh "<task description>"`. Before calling, write the merged plan instructions into a temporary config override if ad-hoc plan instructions were provided. The script outputs a tab-separated line: `<plan_path>\t<session_id>`. Parse both values.
 
 3. Verify the plan file exists. If missing, retry once, then report failure.
 
@@ -52,12 +52,12 @@ Read config using `scripts/config.sh read`. For each phase, merge ad-hoc instruc
 
 5. Initialize state tracking:
    ```bash
-   scripts/config.sh init-state "<task description>" "<plan file path>" <max_rounds> "<session_id>" <true|false for --supervised>
+   ${CLAUDE_PLUGIN_ROOT}/scripts/config.sh init-state "<task description>" "<plan file path>" <max_rounds> "<session_id>" <true|false for --supervised>
    ```
 
 ### Phase 2: Implementation
 
-Read the plan file and `templates/implement-prompt.md`.
+Read the plan file and `${CLAUDE_PLUGIN_ROOT}/templates/implement-prompt.md`.
 
 Substitute the placeholders in the template:
 - `{{plan_contents}}` → contents of the plan file
