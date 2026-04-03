@@ -4,6 +4,11 @@
 #   config.sh read                          — output merged config as JSON
 #   config.sh write <key> <value>           — set a config value (dot notation)
 #   config.sh init-state <task> <plan> <max> — initialize run state
+#
+# ⚠️  MANDATORY TIMEOUT: Every Bash tool call that invokes this script
+#     (or any other script in this directory) MUST set timeout: 2700000
+#     (45 minutes). The default 2-minute timeout will kill long-running
+#     commands like plan.sh and codex exec, destroying the user's work.
 
 set -euo pipefail
 

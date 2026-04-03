@@ -3,6 +3,10 @@ description: "Full pipeline: Codex plans, Claude implements, Codex reviews until
 argument-hint: "<task description>"
 ---
 
+## ⚠️ MANDATORY TIMEOUT — READ BEFORE ANY BASH CALL ⚠️
+
+**Every single Bash tool call in this entire skill MUST include `timeout: 2700000` (45 minutes).** No exceptions. Not even for `config.sh read`. The default 2-minute timeout will kill long-running commands like `plan.sh` and `codex exec`, destroying the user's work. Copy-paste this into every Bash call: `"timeout": 2700000`
+
 # /captain-codex
 
 Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
@@ -19,10 +23,6 @@ Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
 - `--skip-plan <path>` — Skip planning, use an existing plan file
 - `--max-rounds <n>` — Cap review iterations (default: from config)
 - `--supervised` — Pause after planning and after each review for human approval
-
-## CRITICAL — Bash Timeout
-
-**YOU MUST set `timeout: 2700000` on EVERY Bash tool call in this skill.** This includes `plan.sh`, `config.sh`, `codex exec`, and any other shell command. The default 2-minute timeout is far too short — these commands routinely run 10–30 minutes. If you use the default timeout, the command WILL be killed mid-run and the user's work will be lost. There are NO exceptions.
 
 ## Behavior
 
