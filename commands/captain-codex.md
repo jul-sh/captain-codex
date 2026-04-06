@@ -64,11 +64,9 @@ Substitute the placeholders in the template:
 - `{{implementation_instructions}}` → merged config + ad-hoc implementation instructions, joined by newlines
 - `{{plan_file}}` → path to the plan file
 
-Execute the resulting prompt.
+Execute the resulting prompt. The implementation prompt instructs Claude to call `/captain-codex:review` when done, which triggers the Codex review loop. The review command handles the full cycle: dispatching to Codex, parsing the verdict, presenting feedback, and looping until approval or max rounds.
 
-The review gate hook fires automatically when implementation tries to stop. It resumes the Codex planning session to review, and blocks or allows the stop based on the verdict. The loop continues until Codex approves or max rounds (from config) is hit.
-
-Note: ad-hoc review instructions need to be available to the hook. Write them to `.claude-architect/state.json` under an `adhoc_review_instructions` key during init-state so the hook can merge them with the config values.
+Note: ad-hoc review instructions need to be available to the review command. Write them to `.claude-architect/state.json` under an `adhoc_review_instructions` key during init-state so the review can merge them with the config values.
 
 ### Phase 3: Completion
 
