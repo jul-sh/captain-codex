@@ -79,24 +79,17 @@ orchestrator_cmd="$SCRIPT_DIR/scripts/orchestrate.sh $(printf '%q' "$task")"
 # ── Launch in zellij ──────────────────────────────────────────────────────────
 
 if [[ -n "${ZELLIJ:-}" ]]; then
-  # Already inside a zellij session — create a Captain tab and run there
-  echo "Inside zellij session. Creating Captain tab..."
+  # Already inside a zellij session — launch orchestrator as a pinned floating pane
+  echo "Inside zellij session. Launching Captain as floating pane..."
 
-  existing=$(zellij action query-tab-names 2>/dev/null || echo "")
-  if echo "$existing" | grep -q "^Captain$"; then
-    echo "WARNING: A 'Captain' tab already exists. Switching to it."
-    zellij action go-to-tab-name "Captain"
-  else
-    zellij action new-tab -n "Captain"
-  fi
+  zellij action new-pane --floating --pinned true \
+    --name "Captain" \
+    --width "40%" --height "30%" \
+    --x "58%" --y "68%" \
+    -- bash -c "$orchestrator_cmd"
 
-  # Write the command to the Captain tab's shell
-  sleep 0.5
-  zellij action write-chars "$orchestrator_cmd"
-  zellij action write 13  # Enter
-
-  echo "Orchestrator launched in the Captain tab."
-  echo "Switch between tabs to watch Codex (planning/review) and Claude (implementation)."
+  echo "Captain status pane launched (floating, pinned)."
+  echo "Switch between Codex and Claude tabs to watch the agents work."
 else
   # Not inside zellij — generate a layout with the orchestrator command baked in,
   # then start a new session with it.
