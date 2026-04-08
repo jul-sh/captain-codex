@@ -5,6 +5,11 @@
     "plan_model": null,
     "review_model": null
   },
+  "github": {
+    "issue_labels": ["captain-codex"],
+    "implementor_assign": null,
+    "auto_close_issue": true
+  },
   "plans": {
     "directory": "tasks",
     "filename_template": "{{slug}}.md"

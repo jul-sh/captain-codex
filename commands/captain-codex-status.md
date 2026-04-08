@@ -25,6 +25,9 @@ Shows current pipeline state for an active captain-codex run.
    **Plan:** <plan_file>
    **Round:** <round> / <max_rounds>
    **Started:** <started_at>
+   **Issue:** <issue_url> (or "not created yet")
+   **PR:** <pr_url> (or "not created yet")
+   **Branch:** <branch> (or "not created yet")
 
    ### Review History
    | Round | Verdict | Summary | Time |
@@ -33,18 +36,12 @@ Shows current pipeline state for an active captain-codex run.
    | 2     | REJECT  | ...     | ...  |
    ```
 
-4. If phase is "review" or "implementing", also run `/codex:status` to show any active Codex jobs:
-   ```
-   ### Active Codex Jobs
-   <output from /codex:status>
-   ```
-
-5. If phase is "complete":
+4. If phase is "complete":
    ```
    **Status:** Complete — Codex approved on round <N>
    ```
 
-6. If phase is "failed":
+5. If phase is "failed":
    ```
    **Status:** Failed — <reason from state>
    ```
