@@ -93,7 +93,7 @@ cmd_push_and_pr() {
 
   local body=""
   if [[ -n "$issue_number" ]]; then
-    body="Closes #${issue_number}"
+    body="Refs #${issue_number}"
   fi
 
   git push -u origin "$branch" 2>/dev/null || git push origin "$branch"

@@ -53,7 +53,8 @@ codex_model=$(echo "$config" | jq -r '.codex.review_model // .codex.model // "gp
 codex_effort=$(echo "$config" | jq -r '.codex.reasoning_effort // "xhigh"')
 
 # ── Build review prompt ───────────────────────────────────────────────────
-review_prompt=$("$SCRIPT_DIR/scripts/review-prompt.sh" "$plan_file")
+# Pass pr_number so the prompt includes PR context; branch is read from state
+review_prompt=$("$SCRIPT_DIR/scripts/review-prompt.sh" "$plan_file" "$pr_number")
 
 # ── Resume Codex session if available ─────────────────────────────────────
 session_id=""
