@@ -1,0 +1,18 @@
+// captain-codex zellij layout — three tabs for orchestration
+// This is a template. The entry point script generates the actual layout
+// by substituting CAPTAIN_CMD_PLACEHOLDER with the real orchestrator command.
+
+layout {
+    tab name="Captain" focus=true {
+        pane {
+            command "bash"
+            args "-c" "CAPTAIN_CMD_PLACEHOLDER"
+        }
+    }
+    tab name="Codex" {
+        pane
+    }
+    tab name="Claude" {
+        pane
+    }
+}

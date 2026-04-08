@@ -1,20 +1,25 @@
 # captain-codex
 
-Claude Code plugin that puts Codex in charge. Codex plans, Claude implements, Codex reviews; loop until Codex is satisfied.
+Zellij-native orchestrator. Codex plans, Claude implements, Codex reviews — each agent in its own tab.
 
 ## What It Does
 
 One command. You describe what you want; include ad-hoc instructions for any phase in natural language.
 
 ```
-/captain-codex refactor mac app to enable ios app with code sharing
+captain-codex refactor mac app to enable ios app with code sharing
 ```
 
 ```
-/captain-codex refactor auth module. for planning, focus on backwards compat. when implementing, don't touch the database layer. reviewer should be strict about test coverage.
+captain-codex "refactor auth module. for planning, focus on backwards compat. when implementing, don't touch the database layer. reviewer should be strict about test coverage."
 ```
 
-Ad-hoc instructions are merged with your configured defaults for each phase.
+This creates a zellij session with three tabs:
+- **Captain** — orchestrator showing status and progress
+- **Codex** — interactive Codex session for planning and reviewing
+- **Claude** — interactive Claude session for implementing
+
+You can switch between tabs to watch each agent work in real-time.
 
 ## Why
 
@@ -22,49 +27,60 @@ Claude is a strong implementor; fast, creative, good across large codebases. But
 
 Codex is better at architectural reasoning; cleaner module boundaries, more principled dependency graphs. The verifier should be a different model than the implementor. Same-model review has anchoring bias; the reviewer shares the implementor's blind spots. Cross-model review catches things neither catches alone.
 
-I've been doing this manually for a long time; copying plans from Codex to Claude, pasting output back for review, feeding feedback in, repeating. It produces noticeably better code than either model alone. But you have to babysit the whole loop. This plugin automates it.
+The previous version automated this loop but ran everything in a single terminal. This version gives each agent its own zellij tab so you can watch both agents work simultaneously.
 
 ## Dependencies
 
-- [codex-plugin-cc](https://github.com/openai/codex-plugin-cc); OpenAI's official plugin (provides the review gate hook infrastructure)
+- [Zellij](https://zellij.dev/) terminal multiplexer (v0.40+)
 - [Codex CLI](https://github.com/openai/codex) installed and authenticated (`codex login`)
-- Claude Code v2.1.34+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
 - `jq`
 
 ## Installation
 
-This plugin is available through the [jul-sh Claude Code plugin marketplace](https://github.com/jul-sh/claude-plugins).
+Clone this repo and add the `captain-codex` script to your PATH:
 
-### Add the marketplace:
-```
-/plugin marketplace add jul-sh/claude-plugins
+```bash
+git clone https://github.com/jul-sh/captain-codex.git
+ln -s "$(pwd)/captain-codex/captain-codex" ~/.local/bin/captain-codex
 ```
 
-### Install the plugin:
+The slash commands (`/captain-codex:status`, etc.) are still available as a Claude Code plugin:
+
 ```
 /plugin install captain-codex@jul-sh
 ```
 
-## Commands
+## Usage
+
+```
+captain-codex <task description> [--skip-plan <path>] [--max-rounds <n>] [--supervised]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--skip-plan <path>` | Skip planning, use an existing plan file |
+| `--max-rounds <n>` | Cap review iterations (default: from config) |
+| `--supervised` | Pause after planning and each review for human approval |
+
+### Slash commands (inside Claude Code)
 
 | Command | Description |
 |---------|-------------|
-| `/captain-codex <task>` | Full pipeline: plan, implement, review loop |
+| `/captain-codex` | Info about the standalone CLI |
 | `/captain-codex:status` | Current phase, round, review history |
 | `/captain-codex:instructions` | View/edit plan, implementation, and review instructions |
 | `/captain-codex:config` | View/edit plugin config |
 
-Flags: `--skip-plan <path>`, `--max-rounds <n>`, `--supervised`.
-
 ## How It Works
 
-**Planning.** Codex reads the codebase and writes an implementation plan. Saved to `tasks/<slug>.md`. Reviews happen in the same Codex session, so Codex retains full context of the plan it wrote.
+**Planning.** The orchestrator starts Codex in its tab and sends the planning prompt. Codex reads the codebase and writes an implementation plan to `tasks/<slug>.md`. The Codex session stays alive for reviews, retaining full context.
 
-**Implementation.** Claude receives the plan and implements autonomously, maintaining a worklog in the plan file.
+**Implementation.** The orchestrator switches to the Claude tab and sends the plan. Claude implements autonomously, maintaining a worklog in the plan file.
 
-**Review loop.** When Claude finishes, a Stop hook resumes the Codex planning session for review. Rejected; Claude gets feedback and continues. Approved; done. Max rounds exceeded; you decide.
+**Review loop.** When the orchestrator detects Claude has finished (via screen polling), it switches to the Codex tab and sends the review prompt. Rejected: feedback goes back to Claude. Approved: done. Max rounds exceeded: run reports failure.
 
-**Supervised mode.** `--supervised` pauses after planning and after each review round for human approval.
+**Supervised mode.** `--supervised` pauses in the Captain tab after planning and after each review round for human confirmation.
 
 ## Configuration
 

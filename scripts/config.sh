@@ -3,12 +3,12 @@
 # Usage:
 #   config.sh read                          — output merged config as JSON
 #   config.sh write <key> <value>           — set a config value (dot notation)
-#   config.sh init-state <task> <plan> <max> — initialize run state
+#   config.sh init-state <task> <plan> <max> <supervised> <adhoc_review> — initialize run state
 #
 # ⚠️  MANDATORY TIMEOUT: Every Bash tool call that invokes this script
 #     (or any other script in this directory) MUST set timeout: 2700000
 #     (45 minutes). The default 2-minute timeout will kill long-running
-#     commands like plan.sh and codex exec, destroying the user's work.
+#     commands like orchestrate.sh and codex, destroying the user's work.
 
 set -euo pipefail
 
@@ -66,29 +66,30 @@ init_state() {
   local task="$1"
   local plan_file="$2"
   local max_rounds="${3:-10}"
-  local session_id="${4:-}"
-  local supervised="${5:-false}"
-  local adhoc_review="${6:-}"
+  local supervised="${4:-false}"
+  local adhoc_review="${5:-}"
 
   mkdir -p "$(dirname "$STATE_FILE")"
+
+  local zellij_session="${ZELLIJ_SESSION_NAME:-unknown}"
 
   jq -n \
     --arg task "$task" \
     --arg plan "$plan_file" \
     --argjson max "$max_rounds" \
-    --arg session "${session_id:-null}" \
     --argjson supervised "$supervised" \
     --arg adhoc_review "$adhoc_review" \
+    --arg zellij "$zellij_session" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{
       active: true,
-      phase: "implementing",
+      phase: "planning",
       plan_file: $plan,
       task_description: $task,
       round: 0,
       max_rounds: $max,
       supervised: $supervised,
-      codex_session_id: (if $session == "null" or $session == "" then null else $session end),
+      zellij_session: $zellij,
       adhoc_review_instructions: (if $adhoc_review == "" then null else $adhoc_review end),
       review_history: [],
       started_at: $ts
@@ -104,10 +105,10 @@ case "${1:-read}" in
     write_config "$2" "$3"
     ;;
   init-state)
-    init_state "$2" "$3" "${4:-10}"
+    init_state "$2" "$3" "${4:-10}" "${5:-false}" "${6:-}"
     ;;
   *)
-    echo "Usage: config.sh {read|write <key> <value>|init-state <task> <plan> <max>}" >&2
+    echo "Usage: config.sh {read|write <key> <value>|init-state <task> <plan> <max> <supervised> <adhoc_review>}" >&2
     exit 1
     ;;
 esac

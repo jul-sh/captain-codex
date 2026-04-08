@@ -24,6 +24,7 @@ Shows current pipeline state for an active captain-codex run.
    **Task:** <task_description>
    **Plan:** <plan_file>
    **Round:** <round> / <max_rounds>
+   **Zellij Session:** <zellij_session>
    **Started:** <started_at>
 
    ### Review History
@@ -33,10 +34,9 @@ Shows current pipeline state for an active captain-codex run.
    | 2     | REJECT  | ...     | ...  |
    ```
 
-4. If phase is "review" or "implementing", also run `/codex:status` to show any active Codex jobs:
+4. If phase is "review" or "implementing":
    ```
-   ### Active Codex Jobs
-   <output from /codex:status>
+   **Tip:** Switch to the Codex or Claude tab in zellij to watch the agents work in real-time.
    ```
 
 5. If phase is "complete":

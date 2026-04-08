@@ -1,22 +1,23 @@
 ---
-description: "Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied."
-argument-hint: "<task description>"
+description: "Info about the captain-codex zellij-native pipeline."
 ---
-
-## ⚠️ MANDATORY TIMEOUT — READ BEFORE ANY BASH CALL ⚠️
-
-**Every single Bash tool call in this entire skill MUST include `timeout: 2700000` (45 minutes).** No exceptions. Not even for `config.sh read`. The default 2-minute timeout will kill long-running commands like `plan.sh` and `codex exec`, destroying the user's work. Copy-paste this into every Bash call: `"timeout": 2700000`
 
 # /captain-codex
 
-Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
+The captain-codex pipeline is now a standalone CLI that runs in zellij with separate tabs for each agent.
 
 ## Usage
 
+Run from your terminal (not as a Claude Code slash command):
+
 ```
-/captain-codex <task description and any ad-hoc instructions>
-/captain-codex --skip-plan <path> <task description>
+captain-codex <task description> [--skip-plan <path>] [--max-rounds <n>] [--supervised]
 ```
+
+This creates a zellij session with three tabs:
+- **Captain** — orchestrator showing status and progress
+- **Codex** — interactive Codex session for planning and reviewing
+- **Claude** — interactive Claude session for implementing
 
 ## Flags
 
@@ -24,55 +25,16 @@ Full pipeline: Codex plans, Claude implements, Codex reviews until satisfied.
 - `--max-rounds <n>` — Cap review iterations (default: from config)
 - `--supervised` — Pause after planning and after each review for human approval
 
-## Behavior
+## How it works
 
-### Parsing Input
+1. **Planning**: The orchestrator sends the task to Codex in its tab. Codex drafts and formalizes a plan.
+2. **Implementation**: The orchestrator sends the plan to Claude in its tab. Claude implements autonomously.
+3. **Review loop**: When Claude finishes, the orchestrator sends the review prompt to Codex. Codex reviews and issues APPROVE/REJECT. On rejection, feedback is sent back to Claude. Loop continues until approval or max rounds.
 
-Parse flags from the user's input. Everything else is natural language.
+## Configuration
 
-The user may include ad-hoc instructions for any phase inline. Look for cues like "for planning...", "when implementing...", "for review...", "the reviewer should...", "the planner should...", "make sure to...", or similar natural language directing a specific phase.
+Use `/captain-codex:config` and `/captain-codex:instructions` to manage settings — these still work as before.
 
-Extract:
-- **task description** — the core task
-- **ad-hoc plan instructions** — anything directing the planning phase
-- **ad-hoc implementation instructions** — anything directing the implementation phase
-- **ad-hoc review instructions** — anything directing the review phase
+## Status
 
-Read config using `${CLAUDE_PLUGIN_ROOT}/scripts/config.sh read`. For each phase, merge ad-hoc instructions (if any) with the config values by appending the ad-hoc instructions to the config array.
-
-### Phase 1: Planning
-
-1. If `--skip-plan <path>` was provided, verify the plan file exists and skip to Phase 2.
-
-2. Run `${CLAUDE_PLUGIN_ROOT}/scripts/plan.sh "<task description>"`. Before calling, write the merged plan instructions into a temporary config override if ad-hoc plan instructions were provided. The script outputs a tab-separated line: `<plan_path>\t<session_id>`. Parse both values.
-
-3. Verify the plan file exists. If missing, retry once, then report failure.
-
-4. If `--supervised` was specified: present the plan and ask for confirmation before continuing.
-
-5. Initialize state tracking:
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/config.sh init-state "<task description>" "<plan file path>" <max_rounds> "<session_id>" <true|false for --supervised>
-   ```
-
-### Phase 2: Implementation
-
-Read the plan file and `${CLAUDE_PLUGIN_ROOT}/templates/implement-prompt.md`.
-
-Substitute the placeholders in the template:
-- `{{plan_contents}}` → contents of the plan file
-- `{{implementation_instructions}}` → merged config + ad-hoc implementation instructions, joined by newlines
-- `{{plan_file}}` → path to the plan file
-
-Execute the resulting prompt.
-
-The review gate hook fires automatically when implementation tries to stop. It resumes the Codex planning session to review, and blocks or allows the stop based on the verdict. The loop continues until Codex approves or max rounds (from config) is hit.
-
-Note: ad-hoc review instructions need to be available to the hook. Write them to `.claude-architect/state.json` under an `adhoc_review_instructions` key during init-state so the hook can merge them with the config values.
-
-### Phase 3: Completion
-
-1. Read the final state from `.claude-architect/state.json`
-2. Present a summary: task, plan path, rounds, final verdict, review history.
-3. If max rounds exceeded, offer to continue with `--skip-plan`.
-4. Update state to "complete" or "failed".
+Use `/captain-codex:status` to check the current run state.

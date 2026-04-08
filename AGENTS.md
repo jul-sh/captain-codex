@@ -1,14 +1,19 @@
 # captain-codex
 
-Claude Code plugin: Codex plans, Claude implements, Codex reviews.
+Zellij-native orchestrator: Codex plans, Claude implements, Codex reviews — each in their own tab.
 
 ## Layout
 
-- `commands/` — skill markdown files (the command definitions)
-- `hooks/` — shell scripts (Stop event hook)
-- `scripts/` — shell utilities (config, planning, review prompt)
-- `templates/` — prompt skeletons and default config
+- `captain-codex` — standalone entry point script
+- `commands/` — Claude Code slash commands (status, config, instructions)
+- `scripts/` — shell utilities (orchestrate, helpers, config, review prompt)
+- `templates/` — prompt skeletons, default config, zellij layout
+
+## Architecture
+
+Three zellij tabs: Captain (orchestrator), Codex (planning/review), Claude (implementation).
+The orchestrator in `scripts/orchestrate.sh` drives everything via `zellij action write-chars` and `dump-screen`.
 
 ## Config resolution
 
-`templates/default-config.json` ← `~/.claude-architect/config.json` ← `.claude-architect/config.json`
+`templates/default-config.json` <- `~/.claude-architect/config.json` <- `.claude-architect/config.json`
