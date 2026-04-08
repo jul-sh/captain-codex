@@ -13,6 +13,24 @@ mkdir -p "$CAPTAIN_TMP"
 POLL_INTERVAL="${POLL_INTERVAL:-3}"
 PHASE_TIMEOUT="${PHASE_TIMEOUT:-2700}"  # 45 minutes in seconds
 
+# ── Zellij session readiness ──────────────────────────────────────────────────
+
+# Wait until zellij action commands work. The session may not be ready
+# immediately when a layout pane command starts.
+wait_for_session() {
+  local max_attempts=20
+  local attempt=0
+  while [[ $attempt -lt $max_attempts ]]; do
+    if zellij action query-tab-names &>/dev/null; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 0.5
+  done
+  echo "ERROR: zellij session not ready after ${max_attempts} attempts" >&2
+  return 1
+}
+
 # ── Slug generation ───────────────────────────────────────────────────────────
 
 generate_slug() {

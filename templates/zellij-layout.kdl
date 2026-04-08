@@ -1,21 +1,16 @@
-// captain-codex zellij layout — two tabs + floating status pane
+// captain-codex zellij layout — three tabs: Captain, Codex, Claude
 // This is a template. The entry point script generates the actual layout
 // by substituting CAPTAIN_CMD_PLACEHOLDER with the real orchestrator command.
 
 layout {
-    tab name="Codex" focus=true {
-        pane
-        floating_panes {
-            pane {
-                command "bash"
-                args "-c" "CAPTAIN_CMD_PLACEHOLDER"
-                name "Captain"
-                width "40%"
-                height "30%"
-                x "58%"
-                y "68%"
-            }
+    tab name="Captain" focus=true {
+        pane {
+            command "bash"
+            args "-c" "CAPTAIN_CMD_PLACEHOLDER"
         }
+    }
+    tab name="Codex" {
+        pane
     }
     tab name="Claude" {
         pane

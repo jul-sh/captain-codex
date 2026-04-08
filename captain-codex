@@ -72,35 +72,30 @@ export SUPERVISED="$supervised"
 # via environment if needed:
 #   ADHOC_PLAN="..." ADHOC_IMPL="..." ADHOC_REVIEW="..." captain-codex "task"
 
-# ── Build orchestrator command ────────────────────────────────────────────────
+# ── Export task for orchestrator ──────────────────────────────────────────────
+# Pass the task via environment variable to avoid shell/KDL escaping issues
+# with special characters in the task description.
 
-orchestrator_cmd="$SCRIPT_DIR/scripts/orchestrate.sh $(printf '%q' "$task")"
+export CAPTAIN_TASK="$task"
+
+orchestrator_cmd="$SCRIPT_DIR/scripts/orchestrate.sh"
 
 # ── Launch in zellij ──────────────────────────────────────────────────────────
 
 if [[ -n "${ZELLIJ:-}" ]]; then
-  # Already inside a zellij session — launch orchestrator as a pinned floating pane
-  echo "Inside zellij session. Launching Captain as floating pane..."
-
-  zellij action new-pane --floating --pinned true \
-    --name "Captain" \
-    --width "40%" --height "30%" \
-    --x "58%" --y "68%" \
-    -- bash -c "$orchestrator_cmd"
-
-  echo "Captain status pane launched (floating, pinned)."
-  echo "Switch between Codex and Claude tabs to watch the agents work."
+  # Already inside a zellij session — create Captain tab and run orchestrator
+  echo "Inside zellij session. Creating Captain tab..."
+  zellij action new-tab -n "Captain" -- bash -c "$orchestrator_cmd"
+  echo "Captain tab launched."
+  echo "Switch between Captain, Codex, and Claude tabs to watch progress."
 else
   # Not inside zellij — generate a layout with the orchestrator command baked in,
   # then start a new session with it.
   layout_template="$SCRIPT_DIR/templates/zellij-layout.kdl"
   generated_layout="/tmp/captain-codex-layout-$$.kdl"
 
-  # Escape the command for KDL string embedding (backslashes and double quotes)
-  escaped_cmd=$(echo "$orchestrator_cmd" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  sed "s|CAPTAIN_CMD_PLACEHOLDER|$orchestrator_cmd|g" "$layout_template" > "$generated_layout"
 
-  sed "s|CAPTAIN_CMD_PLACEHOLDER|$escaped_cmd|g" "$layout_template" > "$generated_layout"
-
-  echo "Starting zellij session with Captain, Codex, and Claude tabs..."
-  exec zellij -s "captain-codex-$(date +%s)" -l "$generated_layout"
+  echo "Starting zellij session..."
+  exec zellij -s "captain-codex-$(date +%s)" -n "$generated_layout"
 fi

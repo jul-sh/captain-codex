@@ -19,7 +19,11 @@ source "$SCRIPT_DIR/helpers.sh"
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
 
-task="${1:?Usage: orchestrate.sh <task description>}"
+task="${CAPTAIN_TASK:-${1:-}}"
+if [[ -z "$task" ]]; then
+  echo "Usage: CAPTAIN_TASK='...' orchestrate.sh  (or: orchestrate.sh <task>)" >&2
+  exit 1
+fi
 skip_plan="${SKIP_PLAN:-}"
 max_rounds="${MAX_ROUNDS:-}"
 supervised="${SUPERVISED:-false}"
@@ -30,11 +34,6 @@ adhoc_review="${ADHOC_REVIEW:-}"
 # ── Read config ───────────────────────────────────────────────────────────────
 
 config=$(read_config)
-codex_model=$(echo "$config" | jq -r '.codex.plan_model // .codex.model // "gpt-5.4"')
-# Note: codex.review_model is not used in zellij mode because Codex keeps a
-# single interactive session for both planning and review (retaining context).
-# The session uses the plan_model throughout.
-codex_effort=$(echo "$config" | jq -r '.codex.reasoning_effort // "xhigh"')
 plans_dir=$(echo "$config" | jq -r '.plans.directory // "tasks"')
 filename_template=$(echo "$config" | jq -r '.plans.filename_template // "{{slug}}.md"')
 
@@ -97,7 +96,7 @@ setup_tabs() {
 
 start_codex() {
   log_status "Starting Codex..."
-  send_to_tab "Codex" "codex -m $codex_model -c \"model_reasoning_effort=$codex_effort\""
+  send_to_tab "Codex" "codex"
   wait_for_idle "Codex" "$CODEX_IDLE_PATTERN" 120 || {
     log_status "ERROR: Codex failed to start"
     exit 1
@@ -301,6 +300,7 @@ main() {
   log_status "Rounds: $max_rounds | Supervised: $supervised"
   echo ""
 
+  wait_for_session || exit 1
   setup_tabs
   start_codex
   start_claude

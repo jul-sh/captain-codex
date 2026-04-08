@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Mock codex CLI for testing
+# Simulates an interactive codex session: shows prompt, reads input, responds.
+#
+# Behavior controlled by env vars:
+#   MOCK_CODEX_REVIEW_VERDICT — "APPROVE" or "REJECT" (default: APPROVE)
+#   MOCK_CODEX_REJECT_ROUNDS  — reject for this many rounds, then approve (default: 0)
+#
+# Ignores all flags (-m, -c, etc.)
+
+review_verdict="${MOCK_CODEX_REVIEW_VERDICT:-APPROVE}"
+reject_rounds="${MOCK_CODEX_REJECT_ROUNDS:-0}"
+review_count=0
+
+# Show startup banner
+echo "Codex CLI (mock)"
+echo ""
+
+while true; do
+  # Show idle prompt
+  printf "> "
+
+  # Read user input (one line)
+  if ! read -r input; then
+    break
+  fi
+
+  # Skip empty input
+  [[ -z "$input" ]] && continue
+
+  # Check if this is a file-read instruction
+  if [[ "$input" == *"Read and follow the instructions in "* ]]; then
+    filepath=$(echo "$input" | sed 's/.*Read and follow the instructions in //' | tr -d ' ')
+    if [[ -f "$filepath" ]]; then
+      input=$(cat "$filepath")
+    fi
+  fi
+
+  # Detect what kind of prompt this is.
+  # Check review FIRST — review prompts often mention "the plan".
+  if echo "$input" | grep -qi "review\|VERDICT\|implementation against"; then
+    review_count=$((review_count + 1))
+    sleep 0.5
+
+    if [[ "$reject_rounds" -gt 0 && "$review_count" -le "$reject_rounds" ]]; then
+      echo "Reviewing implementation..."
+      echo ""
+      echo "Issues found:"
+      echo "- Missing error handling in main module"
+      echo "- Test coverage is incomplete"
+      echo ""
+      echo "VERDICT: REJECT"
+      echo ""
+      echo "Please address the issues above before resubmitting."
+    else
+      echo "Reviewing implementation..."
+      echo ""
+      echo "Implementation matches the plan. All criteria met."
+      echo ""
+      echo "VERDICT: APPROVE"
+    fi
+  elif echo "$input" | grep -qi "plan\|formalize.*plan\|delegatable"; then
+    # Planning request — check if we need to write a plan file
+    plan_path=$(echo "$input" | grep -oE '[^ ]*tasks/[^ ]*\.md' | head -1)
+    if [[ -n "$plan_path" ]]; then
+      mkdir -p "$(dirname "$plan_path")"
+      cat > "$plan_path" <<'PLAN'
+# Mock Plan
+
+## Objective
+Implement the requested feature.
+
+## Steps
+1. Create the necessary files
+2. Write the code
+3. Test it
+
+## Acceptance Criteria
+- Feature works as described
+- Tests pass
+PLAN
+      echo "Plan written to $plan_path"
+    else
+      echo "I have analyzed the codebase and drafted a plan."
+      echo "The implementation should follow a modular approach."
+    fi
+  else
+    echo "Acknowledged: $input"
+  fi
+  echo ""
+done

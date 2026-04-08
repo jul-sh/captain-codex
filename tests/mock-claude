@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Mock claude CLI for testing
+# Simulates an interactive claude session: shows prompt, reads input, responds.
+
+echo "Claude Code (mock)"
+echo ""
+
+while true; do
+  # Show idle prompt
+  printf "> "
+
+  # Read user input
+  if ! read -r input; then
+    break
+  fi
+
+  [[ -z "$input" ]] && continue
+
+  # Check if this is a file-read instruction
+  if [[ "$input" == *"Read and follow the instructions in "* ]]; then
+    filepath=$(echo "$input" | sed 's/.*Read and follow the instructions in //' | tr -d ' ')
+    if [[ -f "$filepath" ]]; then
+      input=$(cat "$filepath")
+    fi
+  fi
+
+  if echo "$input" | grep -qi "implement\|plan_contents\|Autonomy"; then
+    echo "Implementing the plan..."
+    sleep 0.5
+    echo "Created necessary files and wrote code."
+    echo "All steps completed."
+
+    # Write a worklog to the plan file if we can find it
+    plan_file=$(echo "$input" | grep -oE '[^ ]*tasks/[^ ]*\.md' | head -1)
+    if [[ -n "$plan_file" && -f "$plan_file" ]]; then
+      cat >> "$plan_file" <<'WORKLOG'
+
+## Worklog
+
+### Step 1: Created files
+- Created main module
+- Added configuration
+
+### Step 2: Implementation
+- Wrote core logic
+- Added error handling
+
+### Step 3: Testing
+- Ran tests, all passing
+WORKLOG
+    fi
+  elif echo "$input" | grep -qi "REJECTED\|feedback\|address"; then
+    echo "Addressing review feedback..."
+    sleep 0.5
+    echo "Fixed the issues mentioned in the review."
+    echo "Updated error handling and added test coverage."
+  else
+    echo "Acknowledged: $(echo "$input" | head -c 80)"
+  fi
+  echo ""
+done
