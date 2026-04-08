@@ -96,9 +96,13 @@ cmd_push_and_pr() {
     body="Refs #${issue_number}"
   fi
 
+  # Detect default branch for --base
+  local base_branch
+  base_branch=$(cmd_default_branch)
+
   git push -u origin "$branch" 2>/dev/null || git push origin "$branch"
 
-  local pr_cmd=(gh pr create --title "$title" --body "$body" --head "$branch")
+  local pr_cmd=(gh pr create --title "$title" --body "$body" --head "$branch" --base "$base_branch")
 
   local url
   url=$(retry_once "${pr_cmd[@]}") || die "Failed to create PR"

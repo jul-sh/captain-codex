@@ -91,7 +91,30 @@ if echo "$review_result" | grep -qi "VERDICT: APPROVE"; then
   verdict="APPROVE"
 fi
 
-# ── Post review and update state (unless --no-post) ───────────────────────
+# ── Update state with review result ───────────────────────────────────────
+# Always persist review to state (even in --no-post mode) so the run is resumable
+if [[ -f "$STATE_FILE" ]]; then
+  timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  review_entry=$(jq -n \
+    --argjson round "$next_round" \
+    --arg verdict "$verdict" \
+    --arg summary "$(echo "$review_result" | head -c 2000)" \
+    --arg timestamp "$timestamp" \
+    '{round: $round, verdict: $verdict, summary: $summary, timestamp: $timestamp}')
+
+  if [[ "$no_post" == "true" ]]; then
+    # Supervised mode: save pending review body so it can be posted after human approval
+    jq --argjson round "$next_round" --argjson entry "$review_entry" --arg body "$review_result" \
+      '.round = $round | .phase = "pending_review" | .review_history += [$entry] | .pending_review_body = $body' \
+      "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    jq --argjson round "$next_round" --argjson entry "$review_entry" \
+      '.round = $round | .phase = "review" | .review_history += [$entry]' \
+      "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  fi
+fi
+
+# ── Post review to GitHub (unless --no-post) ──────────────────────────────
 if [[ "$no_post" == "false" ]]; then
   tmpfile=$(mktemp)
   echo "$review_result" > "$tmpfile"
@@ -101,21 +124,6 @@ if [[ "$no_post" == "false" ]]; then
     exit 1
   }
   rm -f "$tmpfile"
-
-  # Update state
-  if [[ -f "$STATE_FILE" ]]; then
-    timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    review_entry=$(jq -n \
-      --argjson round "$next_round" \
-      --arg verdict "$verdict" \
-      --arg summary "$(echo "$review_result" | head -c 2000)" \
-      --arg timestamp "$timestamp" \
-      '{round: $round, verdict: $verdict, summary: $summary, timestamp: $timestamp}')
-
-    jq --argjson round "$next_round" --argjson entry "$review_entry" \
-      '.round = $round | .phase = "review" | .review_history += [$entry]' \
-      "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
-  fi
 fi
 
 # ── Output verdict and review body ────────────────────────────────────────
