@@ -34,13 +34,13 @@ That is the whole project.
 
 ## What This Tool Actually Does
 
-`captain-codex` creates a three-tab zellij session:
+`captain-codex` creates a zellij session with two tabs and a floating status pane:
 
-- `Captain`: a Bash orchestrator running [`scripts/orchestrate.sh`](scripts/orchestrate.sh)
-- `Codex`: one persistent interactive Codex session used for both planning and review
-- `Claude`: one persistent interactive Claude session used for implementation
+- `Codex` tab: one persistent interactive Codex session used for both planning and review
+- `Claude` tab: one persistent interactive Claude session used for implementation
+- `Captain` pane: a small pinned floating pane running [`scripts/orchestrate.sh`](scripts/orchestrate.sh), visible from either tab
 
-If you launch it outside zellij, it generates a temporary layout from [`templates/zellij-layout.kdl`](templates/zellij-layout.kdl) and starts a fresh session. If you launch it inside zellij, it creates or reuses the three tabs in the current session.
+If you launch it outside zellij, it generates a temporary layout from [`templates/zellij-layout.kdl`](templates/zellij-layout.kdl) and starts a fresh session. If you launch it inside zellij, it creates the tabs and floating pane in the current session.
 
 The orchestrator does four simple things:
 
