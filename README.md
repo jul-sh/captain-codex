@@ -26,8 +26,8 @@ I've been doing this manually for a long time; copying plans from Codex to Claud
 
 ## Dependencies
 
-- [codex-plugin-cc](https://github.com/openai/codex-plugin-cc); OpenAI's official plugin (provides the review gate hook infrastructure)
 - [Codex CLI](https://github.com/openai/codex) installed and authenticated (`codex login`)
+- [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated (`gh auth login`)
 - Claude Code v2.1.34+
 - `jq`
 
@@ -58,11 +58,11 @@ Flags: `--skip-plan <path>`, `--max-rounds <n>`, `--supervised`.
 
 ## How It Works
 
-**Planning.** Codex reads the codebase and writes an implementation plan. Saved to `tasks/<slug>.md`. Reviews happen in the same Codex session, so Codex retains full context of the plan it wrote.
+**Planning.** Codex reads the codebase and writes an implementation plan. Saved to `tasks/<slug>.md` and posted as a GitHub issue. Reviews happen in the same Codex session, so Codex retains full context of the plan it wrote.
 
-**Implementation.** Claude receives the plan and implements autonomously, maintaining a worklog in the plan file.
+**Implementation.** Claude receives the plan and implements autonomously on a dedicated branch, maintaining a worklog in the plan file. Once done, a PR is created linking the issue.
 
-**Review loop.** When Claude finishes, a Stop hook resumes the Codex planning session for review. Rejected; Claude gets feedback and continues. Approved; done. Max rounds exceeded; you decide.
+**Review loop.** Codex reviews the PR diff and posts its verdict as a GitHub PR review. Rejected with changes requested; Claude gets the feedback, pushes fixes, and the review repeats. Approved; done. Max rounds exceeded; you decide.
 
 **Supervised mode.** `--supervised` pauses after planning and after each review round for human approval.
 

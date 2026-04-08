@@ -38,4 +38,7 @@ View or edit plugin configuration.
 - `codex.model`, `codex.reasoning_effort`, `codex.plan_model`, `codex.review_model`
 - `plans.directory`, `plans.filename_template`
 - `max_rounds`
+- `github.issue_labels` (JSON array, e.g. `'["captain-codex", "auto"]'`)
+- `github.implementor_assign` (GitHub username or null)
+- `github.auto_close_issue` (true/false)
 - For array values (plan_instructions, implementation_instructions, review_instructions), use `/captain-codex:instructions` or edit the config file directly.

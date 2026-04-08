@@ -1,15 +1,3 @@
 {
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/review-gate.sh",
-            "timeout": 2700000
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }

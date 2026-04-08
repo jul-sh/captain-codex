@@ -82,7 +82,7 @@ init_state() {
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{
       active: true,
-      phase: "implementing",
+      phase: "planning",
       plan_file: $plan,
       task_description: $task,
       round: 0,
@@ -90,9 +90,32 @@ init_state() {
       supervised: $supervised,
       codex_session_id: (if $session == "null" or $session == "" then null else $session end),
       adhoc_review_instructions: (if $adhoc_review == "" then null else $adhoc_review end),
+      issue_number: null,
+      issue_url: null,
+      pr_number: null,
+      pr_url: null,
+      branch: null,
       review_history: [],
       started_at: $ts
     }' > "$STATE_FILE"
+}
+
+# Update a state field
+update_state() {
+  local key="$1"
+  local value="$2"
+
+  if [[ ! -f "$STATE_FILE" ]]; then
+    echo "ERROR: No state file found" >&2
+    return 1
+  fi
+
+  # Try to parse value as JSON; if it fails, treat as string
+  if echo "$value" | jq . >/dev/null 2>&1; then
+    jq --argjson val "$value" ".$key = \$val" "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    jq --arg val "$value" ".$key = \$val" "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  fi
 }
 
 # ── Main dispatch ──────────────────────────────────────────────────────────
@@ -104,10 +127,13 @@ case "${1:-read}" in
     write_config "$2" "$3"
     ;;
   init-state)
-    init_state "$2" "$3" "${4:-10}"
+    init_state "$2" "$3" "${4:-10}" "${5:-}" "${6:-false}" "${7:-}"
+    ;;
+  update-state)
+    update_state "$2" "$3"
     ;;
   *)
-    echo "Usage: config.sh {read|write <key> <value>|init-state <task> <plan> <max>}" >&2
+    echo "Usage: config.sh {read|write|init-state|update-state} [args...]" >&2
     exit 1
     ;;
 esac
