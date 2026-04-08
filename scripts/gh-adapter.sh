@@ -172,6 +172,10 @@ cmd_checkout() {
   } || die "Failed to check out branch: $branch"
 }
 
+cmd_default_branch() {
+  gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || echo "main"
+}
+
 cmd_close_issue() {
   local issue_number="$1"
   retry_once gh issue close "$issue_number" || die "Failed to close issue"
@@ -187,9 +191,10 @@ case "${1:-}" in
   push)             shift; cmd_push "$@" ;;
   post-review)      shift; cmd_post_review "$@" ;;
   get-review-feedback) shift; cmd_get_review_feedback "$@" ;;
+  default-branch)   shift; cmd_default_branch "$@" ;;
   close-issue)      shift; cmd_close_issue "$@" ;;
   *)
-    echo "Usage: gh-adapter.sh {create-issue|create-branch|checkout|push-and-pr|push|post-review|get-review-feedback|close-issue} [args...]" >&2
+    echo "Usage: gh-adapter.sh {create-issue|create-branch|checkout|push-and-pr|push|post-review|get-review-feedback|default-branch|close-issue} [args...]" >&2
     exit 1
     ;;
 esac

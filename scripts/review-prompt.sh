@@ -20,8 +20,8 @@ if [[ -z "$branch" && -f "$STATE_FILE" ]]; then
   branch=$(jq -r '.branch // empty' "$STATE_FILE")
 fi
 
-# Detect default branch
-default_branch=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null) || default_branch="main"
+# Detect default branch via adapter
+default_branch=$("$SCRIPT_DIR/scripts/gh-adapter.sh" default-branch)
 
 # Read config
 config=$("$SCRIPT_DIR/scripts/config.sh" read)

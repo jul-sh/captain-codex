@@ -47,6 +47,14 @@ if [[ -f "$STATE_FILE" ]]; then
   fi
 fi
 
+# ── Ensure correct branch is checked out ──────────────────────────────────
+if [[ -f "$STATE_FILE" ]]; then
+  branch=$(jq -r '.branch // empty' "$STATE_FILE")
+  if [[ -n "$branch" ]]; then
+    "$SCRIPT_DIR/scripts/gh-adapter.sh" checkout "$branch" 2>/dev/null || true
+  fi
+fi
+
 # ── Read config ───────────────────────────────────────────────────────────
 config=$("$SCRIPT_DIR/scripts/config.sh" read)
 codex_model=$(echo "$config" | jq -r '.codex.review_model // .codex.model // "gpt-5.4"')
