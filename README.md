@@ -45,12 +45,6 @@ git clone https://github.com/jul-sh/captain-codex.git
 ln -s "$(pwd)/captain-codex/captain-codex" ~/.local/bin/captain-codex
 ```
 
-The slash commands (`/captain-codex:status`, etc.) are still available as a Claude Code plugin:
-
-```
-/plugin install captain-codex@jul-sh
-```
-
 ## Usage
 
 ```
@@ -62,15 +56,6 @@ captain-codex <task description> [--skip-plan <path>] [--max-rounds <n>] [--supe
 | `--skip-plan <path>` | Skip planning, use an existing plan file |
 | `--max-rounds <n>` | Cap review iterations (default: from config) |
 | `--supervised` | Pause after planning and each review for human approval |
-
-### Slash commands (inside Claude Code)
-
-| Command | Description |
-|---------|-------------|
-| `/captain-codex` | Info about the standalone CLI |
-| `/captain-codex:status` | Current phase, round, review history |
-| `/captain-codex:instructions` | View/edit plan, implementation, and review instructions |
-| `/captain-codex:config` | View/edit plugin config |
 
 ## How It Works
 
@@ -92,16 +77,10 @@ Three instruction sets control what each phase does:
 | `implementation_instructions` | How Claude should implement |
 | `review_instructions` | What Codex should check during review |
 
-Edit via `/captain-codex:instructions` or directly in config files.
+Edit directly in config files:
 
-User-level: `~/.claude-architect/config.json`
-Project-level override: `.claude-architect/config.json`
-
-```
-/captain-codex:config                           # view all
-/captain-codex:config codex.model gpt-5.4      # set a value
-/captain-codex:config max_rounds 15             # set a value
-```
+- User-level: `~/.claude-architect/config.json`
+- Project-level override: `.claude-architect/config.json`
 
 See `templates/default-config.json` for all options.
 

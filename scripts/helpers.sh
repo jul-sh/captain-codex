@@ -2,7 +2,7 @@
 # captain-codex shared helpers for zellij-native orchestration
 # Source this file: source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
-# Resolve plugin root
+# Resolve project root
 CAPTAIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Temp directory for this orchestration run

@@ -5,7 +5,6 @@ Zellij-native orchestrator: Codex plans, Claude implements, Codex reviews — ea
 ## Layout
 
 - `captain-codex` — standalone entry point script
-- `commands/` — Claude Code slash commands (status, config, instructions)
 - `scripts/` — shell utilities (orchestrate, helpers, config, review prompt)
 - `templates/` — prompt skeletons, default config, zellij layout
 
