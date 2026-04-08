@@ -99,7 +99,7 @@ send_to_tab() {
   local tab_name="$1"
   local text="$2"
 
-  zellij action go-to-tab-name "$tab_name"
+  zellij action go-to-tab-name --create "$tab_name"
   sleep 0.5  # let focus settle
   zellij action write-chars "$text"
   zellij action write 13  # Enter

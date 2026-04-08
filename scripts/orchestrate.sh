@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # captain-codex zellij-native orchestrator
-# Runs in a floating "Captain" pane. Coordinates Codex (planning/review) and
+# Runs in the "Captain" tab. Coordinates Codex (planning/review) and
 # Claude (implementation) across separate zellij tabs.
 #
 # Usage: orchestrate.sh <task> [options]
@@ -78,18 +78,13 @@ trap cleanup_tmp EXIT
 # ── Tab setup ─────────────────────────────────────────────────────────────────
 
 setup_tabs() {
-  local existing
-  existing=$(zellij action query-tab-names 2>/dev/null || echo "")
+  zellij action go-to-tab-name --create "Codex"
+  log_status "Ensured Codex tab"
 
-  if ! echo "$existing" | grep -q "^Codex$"; then
-    zellij action new-tab -n "Codex"
-    log_status "Created Codex tab"
-  fi
+  zellij action go-to-tab-name --create "Claude"
+  log_status "Ensured Claude tab"
 
-  if ! echo "$existing" | grep -q "^Claude$"; then
-    zellij action new-tab -n "Claude"
-    log_status "Created Claude tab"
-  fi
+  zellij action go-to-tab-name --create "Captain"
 }
 
 # ── Start agent sessions ─────────────────────────────────────────────────────

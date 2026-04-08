@@ -63,39 +63,44 @@ if [[ -z "$task" ]]; then
   task="(resuming from existing plan: $skip_plan)"
 fi
 
-# ── Export orchestrator env vars ──────────────────────────────────────────────
+# ── Build a single zellij launch path ─────────────────────────────────────────
+# Always generate a layout and hand it to zellij. Outside zellij, this starts a
+# fresh session. Inside zellij, zellij adds the layout as tabs to the current
+# session. We pass task/flags via a launcher script so the orchestrator does not
+# depend on environment inheritance from the zellij server.
 
-export SKIP_PLAN="$skip_plan"
-export MAX_ROUNDS="$max_rounds"
-export SUPERVISED="$supervised"
-# Ad-hoc instructions are not parsed from natural language here — pass them
-# via environment if needed:
-#   ADHOC_PLAN="..." ADHOC_IMPL="..." ADHOC_REVIEW="..." captain-codex "task"
+layout_template="$SCRIPT_DIR/templates/zellij-layout.kdl"
+generated_layout="/tmp/captain-codex-layout-$$.kdl"
+launcher_script="/tmp/captain-codex-launch-$$.sh"
 
-# ── Export task for orchestrator ──────────────────────────────────────────────
-# Pass the task via environment variable to avoid shell/KDL escaping issues
-# with special characters in the task description.
+adhoc_plan="${ADHOC_PLAN:-}"
+adhoc_impl="${ADHOC_IMPL:-}"
+adhoc_review="${ADHOC_REVIEW:-}"
 
-export CAPTAIN_TASK="$task"
+quoted_skip_plan=$(printf '%q' "$skip_plan")
+quoted_max_rounds=$(printf '%q' "$max_rounds")
+quoted_supervised=$(printf '%q' "$supervised")
+quoted_adhoc_plan=$(printf '%q' "$adhoc_plan")
+quoted_adhoc_impl=$(printf '%q' "$adhoc_impl")
+quoted_adhoc_review=$(printf '%q' "$adhoc_review")
+quoted_orchestrator=$(printf '%q' "$SCRIPT_DIR/scripts/orchestrate.sh")
+quoted_task=$(printf '%q' "$task")
 
-orchestrator_cmd="$SCRIPT_DIR/scripts/orchestrate.sh"
+cat > "$launcher_script" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export SKIP_PLAN=$quoted_skip_plan
+export MAX_ROUNDS=$quoted_max_rounds
+export SUPERVISED=$quoted_supervised
+export ADHOC_PLAN=$quoted_adhoc_plan
+export ADHOC_IMPL=$quoted_adhoc_impl
+export ADHOC_REVIEW=$quoted_adhoc_review
+exec $quoted_orchestrator $quoted_task
+EOF
+chmod +x "$launcher_script"
 
-# ── Launch in zellij ──────────────────────────────────────────────────────────
+escaped_launcher_cmd=$(echo "$launcher_script" | sed 's/\\/\\\\/g; s/"/\\"/g')
+sed "s|CAPTAIN_CMD_PLACEHOLDER|$escaped_launcher_cmd|g" "$layout_template" > "$generated_layout"
 
-if [[ -n "${ZELLIJ:-}" ]]; then
-  # Already inside a zellij session — create Captain tab and run orchestrator
-  echo "Inside zellij session. Creating Captain tab..."
-  zellij action new-tab -n "Captain" -- bash -c "$orchestrator_cmd"
-  echo "Captain tab launched."
-  echo "Switch between Captain, Codex, and Claude tabs to watch progress."
-else
-  # Not inside zellij — generate a layout with the orchestrator command baked in,
-  # then start a new session with it.
-  layout_template="$SCRIPT_DIR/templates/zellij-layout.kdl"
-  generated_layout="/tmp/captain-codex-layout-$$.kdl"
-
-  sed "s|CAPTAIN_CMD_PLACEHOLDER|$orchestrator_cmd|g" "$layout_template" > "$generated_layout"
-
-  echo "Starting zellij session..."
-  exec zellij -s "captain-codex-$(date +%s)" -n "$generated_layout"
-fi
+echo "Launching captain-codex layout..."
+exec zellij -l "$generated_layout"

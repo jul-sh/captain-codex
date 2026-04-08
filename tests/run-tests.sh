@@ -64,10 +64,19 @@ assert_file_exists() {
 
 assert_contains() {
   local label="$1" haystack="$2" needle="$3"
-  if echo "$haystack" | grep -q "$needle"; then
+  if echo "$haystack" | grep -Fq -- "$needle"; then
     pass "$label"
   else
     fail "$label" "output does not contain '$needle'"
+  fi
+}
+
+assert_not_contains() {
+  local label="$1" haystack="$2" needle="$3"
+  if echo "$haystack" | grep -Fq -- "$needle"; then
+    fail "$label" "output unexpectedly contains '$needle'"
+  else
+    pass "$label"
   fi
 }
 
@@ -237,6 +246,75 @@ test_entry_point_dep_check() {
   local output
   output=$(PATH="/usr/bin:/bin" "$PROJECT_ROOT/captain-codex" "test" 2>&1 || true)
   assert_contains "missing dep error" "$output" "required but not found"
+}
+
+test_entry_point_uses_single_layout_launch_path() {
+  echo "Test: entry point always launches via zellij layout"
+
+  local mock_bin
+  mock_bin=$(mktemp -d /tmp/captain-codex-zellij-mock-XXXXXX)
+  local zellij_log="$mock_bin/zellij.log"
+  local captured_layout="$mock_bin/captured-layout.kdl"
+  local jq_bin
+  jq_bin=$(command -v jq)
+
+  cat > "$mock_bin/zellij" <<SCRIPT
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' '---' >> "$zellij_log"
+printf '%s\n' "\$@" >> "$zellij_log"
+args=( "\$@" )
+for ((i=0; i<\${#args[@]}; i++)); do
+  if [[ "\${args[i]}" == "-l" || "\${args[i]}" == "--layout" ]]; then
+    cp "\${args[i+1]}" "$captured_layout"
+    break
+  fi
+done
+SCRIPT
+  cat > "$mock_bin/codex" <<'SCRIPT'
+#!/usr/bin/env bash
+exit 0
+SCRIPT
+  cat > "$mock_bin/claude" <<'SCRIPT'
+#!/usr/bin/env bash
+exit 0
+SCRIPT
+  chmod +x "$mock_bin/zellij" "$mock_bin/codex" "$mock_bin/claude"
+  ln -s "$jq_bin" "$mock_bin/jq"
+
+  PATH="$mock_bin:$PATH" "$PROJECT_ROOT/captain-codex" "tabs should actually exist" >/dev/null 2>&1
+
+  local outside_log outside_layout outside_launcher
+  outside_log=$(cat "$zellij_log")
+  outside_layout=$(cat "$captured_layout")
+  assert_contains "outside zellij uses layout flag" "$outside_log" $'---\n-l'
+  assert_not_contains "outside zellij does not use action subcommands" "$outside_log" "action"
+  assert_contains "outside layout has Captain tab" "$outside_layout" 'tab name="Captain"'
+  assert_contains "outside layout has Codex tab" "$outside_layout" 'tab name="Codex"'
+  assert_contains "outside layout has Claude tab" "$outside_layout" 'tab name="Claude"'
+
+  outside_launcher=$(sed -n 's/.*args "-c" "\(.*\)"/\1/p' "$captured_layout")
+  assert_contains "outside launcher runs orchestrator" "$(cat "$outside_launcher")" "scripts/orchestrate.sh"
+  assert_contains "outside launcher passes task inline" "$(cat "$outside_launcher")" "tabs\\ should\\ actually\\ exist"
+
+  : > "$zellij_log"
+  rm -f "$captured_layout"
+  PATH="$mock_bin:$PATH" ZELLIJ=1 "$PROJECT_ROOT/captain-codex" "tabs should actually exist" >/dev/null 2>&1
+
+  local inside_log inside_layout inside_launcher
+  inside_log=$(cat "$zellij_log")
+  inside_layout=$(cat "$captured_layout")
+  assert_contains "inside zellij still uses layout flag" "$inside_log" $'---\n-l'
+  assert_not_contains "inside zellij does not use action subcommands" "$inside_log" "action"
+  assert_contains "inside layout has Captain tab" "$inside_layout" 'tab name="Captain"'
+  assert_contains "inside layout has Codex tab" "$inside_layout" 'tab name="Codex"'
+  assert_contains "inside layout has Claude tab" "$inside_layout" 'tab name="Claude"'
+
+  inside_launcher=$(sed -n 's/.*args "-c" "\(.*\)"/\1/p' "$captured_layout")
+  assert_contains "inside launcher runs orchestrator" "$(cat "$inside_launcher")" "scripts/orchestrate.sh"
+  assert_contains "inside launcher passes task inline" "$(cat "$inside_launcher")" "tabs\\ should\\ actually\\ exist"
+
+  rm -rf "$mock_bin"
 }
 
 test_layout_generation() {
@@ -527,6 +605,7 @@ main() {
   test_prompt_builders
   test_entry_point_flags
   test_entry_point_dep_check
+  test_entry_point_uses_single_layout_launch_path
   test_layout_generation
 
   if [[ "$RUN_INTEGRATION" == "true" ]]; then

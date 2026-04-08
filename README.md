@@ -1,36 +1,14 @@
 # captain-codex
 
-Most "agentic coding" setups make one model do everything: plan, implement, and review its own work.
+Zellij-native orchestrator. Codex plans, Claude implements, Codex reviews — each agent in its own tab.
 
-That is convenient. It is also weak.
+## Why
 
-Once a model picks a framing for a problem, it gets anchored on that framing. Its later "review" is usually not a true external audit. It is mostly a consistency check against its own earlier assumptions. You get correlated mistakes, blind spots that line up, and a strong tendency to declare success too early.
+Coding agents reward-hack. They take shortcuts to look done: skip edge cases, drift from the plan, write shallow tests, and declare victory early. Review helps catch that.
 
-`captain-codex` exists to break that loop.
+Using a different model for review often helps more. Not because users already have a reviewer, and not because same-model review must share a session. It helps because different models have different blind spots. Cross-model review is one practical way to get less correlated mistakes.
 
-The default split is:
-
-- Codex plans.
-- Claude implements.
-- Codex reviews.
-
-The point is not model tribalism. The point is error decorrelation. You want the reviewer to be a different system with different priors, different failure modes, and no attachment to the implementation decisions it did not make. Cross-model review is not perfect, but it is better than same-model review for the same reason external code review is better than self-review: less anchoring, less self-justification, more chance of catching structural mistakes.
-
-This repo packages that idea into a small zellij-native orchestrator. It is not a platform. It is a shell script driving two interactive CLIs in separate tabs.
-
-## The Core Insight
-
-If you want reliable multi-agent coding, the main problem is not "how do I get more tokens through the model." The main problem is "how do I keep the reviewer from inheriting the implementor's mistakes."
-
-Same-model review is structurally biased:
-
-- The reviewer starts from the implementor's decomposition.
-- The reviewer tends to accept the same shortcuts it would have taken itself.
-- The reviewer often overweights local coherence and underweights plan drift.
-
-Cross-model review helps because the reviewer is not mentally committed to the implementation path. It reads the plan, reads the diff, reads the worklog, and judges from outside the original frame.
-
-That is the whole project.
+This repo packages that loop into a small zellij-native orchestrator. It is not a platform. It is a shell script driving two interactive CLIs in separate tabs.
 
 ## What This Tool Actually Does
 
@@ -40,7 +18,7 @@ That is the whole project.
 - `Codex` tab: one persistent interactive Codex session used for both planning and review
 - `Claude` tab: one persistent interactive Claude session used for implementation
 
-If you launch it outside zellij, it generates a temporary layout from [`templates/zellij-layout.kdl`](templates/zellij-layout.kdl) and starts a fresh session. If you launch it inside zellij, it creates the tabs in the current session.
+It always generates a temporary layout from [`templates/zellij-layout.kdl`](templates/zellij-layout.kdl) and hands that layout to zellij. Outside zellij, that starts a fresh session. Inside zellij, zellij adds the same Captain/Codex/Claude layout to the current session.
 
 The orchestrator does four simple things:
 
