@@ -20,6 +20,9 @@ if [[ -z "$branch" && -f "$STATE_FILE" ]]; then
   branch=$(jq -r '.branch // empty' "$STATE_FILE")
 fi
 
+# Detect default branch
+default_branch=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null) || default_branch="main"
+
 # Read config
 config=$("$SCRIPT_DIR/scripts/config.sh" read)
 
@@ -63,5 +66,6 @@ prompt="${prompt//\{\{review_instructions\}\}/$review_instructions}"
 prompt="${prompt//\{\{worklog\}\}/$worklog}"
 prompt="${prompt//\{\{pr_number\}\}/${pr_number:-unknown}}"
 prompt="${prompt//\{\{branch\}\}/${branch:-unknown}}"
+prompt="${prompt//\{\{default_branch\}\}/$default_branch}"
 
 echo "$prompt"

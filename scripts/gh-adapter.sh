@@ -164,10 +164,11 @@ cmd_get_review_feedback() {
 
 cmd_checkout() {
   local branch="$1"
-  # Try local checkout first; if branch doesn't exist locally, fetch and track remote
+  # Try local checkout first; if branch doesn't exist locally, fetch with explicit
+  # refspec to ensure origin/<branch> is materialized, then create tracking branch
   git checkout "$branch" 2>/dev/null || {
-    git fetch origin "$branch" 2>/dev/null && \
-    git checkout -b "$branch" "origin/$branch" 2>/dev/null
+    git fetch origin "+refs/heads/${branch}:refs/remotes/origin/${branch}" 2>/dev/null && \
+    git checkout -b "$branch" --track "origin/$branch" 2>/dev/null
   } || die "Failed to check out branch: $branch"
 }
 
