@@ -1,24 +1,36 @@
-# CrossCheck
+# captain-codex
 
-Use different models across planning, implementation, and review to catch reward hacking and blind spots.
+Use different models for planning, implementation, and review to catch reward hacking and blind spots.
 
-## Why
+## What It Does
 
-Coding agents reward-hack. They take shortcuts to look done: skip edge cases, drift from the plan, write shallow tests, and declare victory early. Review helps catch that.
+One command. You describe what you want; include ad-hoc instructions for any phase in natural language.
 
-Using a different model for review often helps because different models have different blind spots. Cross-model review is one practical way to get less correlated mistakes.
+```
+captain-codex refactor mac app to enable ios app with code sharing
+```
 
-This repo packages that loop into a small zellij-native orchestrator. It is not a platform. It is a shell script driving two interactive CLIs in separate tabs.
+```
+captain-codex "refactor auth module. for planning, focus on backwards compat. when implementing, don't touch the database layer. reviewer should be strict about test coverage."
+```
 
-## What This Tool Actually Does
-
-`captain-codex` creates a zellij session with three tabs:
+This creates a zellij session with three tabs:
 
 - `Captain` tab: the orchestrator ([`scripts/orchestrate.sh`](scripts/orchestrate.sh)), shows status and progress
 - `Codex` tab: one persistent interactive Codex session used for both planning and review
 - `Claude` tab: one persistent interactive Claude session used for implementation
 
 It always generates a temporary layout from [`templates/zellij-layout.kdl`](templates/zellij-layout.kdl) and hands that layout to zellij. Outside zellij, that starts a fresh session. Inside zellij, zellij adds the same Captain/Codex/Claude layout to the current session.
+
+You can switch between tabs to watch each agent work in real-time.
+
+## Why
+
+Coding agents reward-hack. They take shortcuts to look done: skip edge cases, write shallow tests, drift from the plan, and declare victory early. You need review to catch that.
+
+Using a different model for review often helps because different models have different blind spots. Cross-model review catches things a single model is more likely to miss.
+
+This repo packages that loop into a small zellij-native orchestrator. It is not a platform. It is a shell script driving two interactive CLIs in separate tabs.
 
 The orchestrator does four simple things:
 
