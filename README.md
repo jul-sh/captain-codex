@@ -1,12 +1,12 @@
-# captain-codex
+# CrossCheck
 
-Zellij-native orchestrator. Codex plans, Claude implements, Codex reviews — each agent in its own tab.
+Use different models across planning, implementation, and review to catch reward hacking and blind spots.
 
 ## Why
 
 Coding agents reward-hack. They take shortcuts to look done: skip edge cases, drift from the plan, write shallow tests, and declare victory early. Review helps catch that.
 
-Using a different model for review often helps more. Not because users already have a reviewer, and not because same-model review must share a session. It helps because different models have different blind spots. Cross-model review is one practical way to get less correlated mistakes.
+Using a different model for review often helps because different models have different blind spots. Cross-model review is one practical way to get less correlated mistakes.
 
 This repo packages that loop into a small zellij-native orchestrator. It is not a platform. It is a shell script driving two interactive CLIs in separate tabs.
 
