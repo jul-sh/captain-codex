@@ -10,3 +10,7 @@ You are running in an automated pipeline. Keep moving without unnecessary pauses
 - You may create sub-plans for complex steps, but execute them immediately without waiting for approval.
 - Default to making reasonable decisions and proceeding. Only ask a question if the answer is truly unguessable and blocking — not for confirmation or preference.
 - When you are finished, simply stop. The orchestrator will detect completion and trigger a review automatically.
+
+## MANDATORY: Bash Timeout
+
+**Every Bash tool call MUST set `timeout: 2700000` (45 minutes).** The default timeout is too short and will kill your commands mid-execution.
