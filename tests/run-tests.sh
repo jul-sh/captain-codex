@@ -2,8 +2,8 @@
 # captain-codex test suite
 #
 # Usage:
-#   ./tests/run-tests.sh          # run unit tests only (fast, no zellij needed)
-#   ./tests/run-tests.sh --all    # include integration tests (needs real terminal + zellij)
+#   ./tests/run-tests.sh          # run unit tests only (fast)
+#   ./tests/run-tests.sh --all    # include integration tests (runs mock agents)
 
 set -euo pipefail
 
@@ -156,7 +156,7 @@ test_mock_codex_writes_plan() {
 
   local plan_path="$TEST_WORKDIR/tasks/mock-plan-test.md"
   echo "Formalize your plan and save it to: $plan_path. Write the file now." \
-    | PATH="$MOCK_BIN:$PATH" codex > /dev/null 2>&1
+    | PATH="$MOCK_BIN:$PATH" codex exec -o /dev/null --full-auto - > /dev/null 2>&1
 
   assert_file_exists "plan file created" "$plan_path"
   assert_contains "plan has content" "$(cat "$plan_path")" "Objective"
@@ -167,7 +167,7 @@ test_mock_codex_approves() {
 
   local output
   output=$(echo "Review this implementation against the plan." \
-    | PATH="$MOCK_BIN:$PATH" MOCK_CODEX_REVIEW_VERDICT=APPROVE codex 2>/dev/null)
+    | PATH="$MOCK_BIN:$PATH" MOCK_CODEX_REVIEW_VERDICT=APPROVE codex exec -o /dev/null --full-auto - 2>/dev/null)
 
   assert_contains "contains APPROVE" "$output" "VERDICT: APPROVE"
 }
@@ -175,23 +175,31 @@ test_mock_codex_approves() {
 test_mock_codex_rejects_then_approves() {
   echo "Test: mock codex rejects N rounds then approves"
 
-  local output
-  output=$(printf 'Review implementation against plan\nReview implementation against plan\n' \
-    | PATH="$MOCK_BIN:$PATH" MOCK_CODEX_REJECT_ROUNDS=1 codex 2>/dev/null)
+  local state_file="/tmp/mock-codex-review-test-$$"
+  rm -f "$state_file"
 
-  local rejects approves
-  rejects=$(echo "$output" | grep -c "VERDICT: REJECT" || true)
-  approves=$(echo "$output" | grep -c "VERDICT: APPROVE" || true)
+  # Round 1: reject
+  local output1
+  output1=$(echo "Review implementation against plan" \
+    | PATH="$MOCK_BIN:$PATH" MOCK_CODEX_REJECT_ROUNDS=1 MOCK_CODEX_STATE_FILE="$state_file" \
+      codex exec -o /dev/null --full-auto - 2>/dev/null)
 
-  assert_eq "1 reject" "1" "$rejects"
-  assert_eq "1 approve" "1" "$approves"
+  # Round 2: approve
+  local output2
+  output2=$(echo "Review implementation against plan" \
+    | PATH="$MOCK_BIN:$PATH" MOCK_CODEX_REJECT_ROUNDS=1 MOCK_CODEX_STATE_FILE="$state_file" \
+      codex exec -o /dev/null --full-auto - 2>/dev/null)
+
+  assert_contains "round 1 rejects" "$output1" "VERDICT: REJECT"
+  assert_contains "round 2 approves" "$output2" "VERDICT: APPROVE"
+  rm -f "$state_file"
 }
 
 test_mock_claude_responds() {
   echo "Test: mock claude responds to prompts"
 
   local output
-  output=$(echo "Implement the plan." | PATH="$MOCK_BIN:$PATH" claude 2>/dev/null)
+  output=$(echo "Implement the plan." | PATH="$MOCK_BIN:$PATH" claude -p --output-format text --dangerously-skip-permissions 2>/dev/null)
   assert_contains "claude responds" "$output" "Implementing"
 }
 
@@ -228,360 +236,153 @@ test_prompt_builders() {
 test_entry_point_flags() {
   echo "Test: entry point flag parsing"
 
-  # Test that no args shows usage
   local output
   output=$("$PROJECT_ROOT/captain-codex" 2>&1 || true)
   assert_contains "no args shows usage" "$output" "Usage"
-
-  # Test that --supervised flag is parsed (check env export)
-  # We can't fully test flag parsing without launching zellij,
-  # so just verify the usage message format
   assert_contains "usage mentions skip-plan" "$output" "skip-plan"
 }
 
 test_entry_point_dep_check() {
   echo "Test: entry point dependency checks"
 
-  # Run with a PATH that has bash but not the required deps
   local output
   output=$(PATH="/usr/bin:/bin" "$PROJECT_ROOT/captain-codex" "test" 2>&1 || true)
   assert_contains "missing dep error" "$output" "required but not found"
 }
 
-test_entry_point_uses_single_layout_launch_path() {
-  echo "Test: entry point always launches via zellij layout"
+# ── Integration Tests (full orchestration with mock agents) ──────────────────
 
-  local mock_bin
-  mock_bin=$(mktemp -d /tmp/captain-codex-zellij-mock-XXXXXX)
-  local zellij_log="$mock_bin/zellij.log"
-  local captured_layout="$mock_bin/captured-layout.kdl"
-  local jq_bin
-  jq_bin=$(command -v jq)
+test_full_orchestration_approve() {
+  echo "Test: full orchestration flow — plan, implement, approve"
 
-  cat > "$mock_bin/zellij" <<SCRIPT
-#!/usr/bin/env bash
-set -euo pipefail
-printf '%s\n' '---' >> "$zellij_log"
-printf '%s\n' "\$@" >> "$zellij_log"
-args=( "\$@" )
-for ((i=0; i<\${#args[@]}; i++)); do
-  if [[ "\${args[i]}" == "-l" || "\${args[i]}" == "--layout" ]]; then
-    cp "\${args[i+1]}" "$captured_layout"
-    break
-  fi
-done
-SCRIPT
-  cat > "$mock_bin/codex" <<'SCRIPT'
-#!/usr/bin/env bash
-exit 0
-SCRIPT
-  cat > "$mock_bin/claude" <<'SCRIPT'
-#!/usr/bin/env bash
-exit 0
-SCRIPT
-  chmod +x "$mock_bin/zellij" "$mock_bin/codex" "$mock_bin/claude"
-  ln -s "$jq_bin" "$mock_bin/jq"
+  local workdir
+  workdir=$(mktemp -d /tmp/captain-codex-integ-XXXXXX)
+  mkdir -p "$workdir/.claude-architect" "$workdir/tasks"
 
-  PATH="$mock_bin:$PATH" "$PROJECT_ROOT/captain-codex" "tabs should actually exist" >/dev/null 2>&1
+  local output
+  output=$(
+    cd "$workdir"
+    PATH="$MOCK_BIN:$PATH" \
+    MOCK_CODEX_REVIEW_VERDICT=APPROVE \
+    MOCK_CODEX_STATE_FILE="/tmp/mock-codex-integ-$$" \
+      "$PROJECT_ROOT/scripts/orchestrate.sh" "test integration task" 2>&1
+  ) || true
 
-  local outside_log outside_layout outside_launcher
-  outside_log=$(cat "$zellij_log")
-  outside_layout=$(cat "$captured_layout")
-  assert_contains "outside zellij uses layout flag" "$outside_log" $'---\n-l'
-  assert_not_contains "outside zellij does not use action subcommands" "$outside_log" "action"
-  assert_contains "outside layout has Captain tab" "$outside_layout" 'tab name="Captain"'
-  assert_contains "outside layout has Codex tab" "$outside_layout" 'tab name="Codex"'
-  assert_contains "outside layout has Claude tab" "$outside_layout" 'tab name="Claude"'
+  local sf="$workdir/.claude-architect/state.json"
 
-  outside_launcher=$(sed -n 's/.*args "-c" "\(.*\)"/\1/p' "$captured_layout")
-  assert_contains "outside launcher runs orchestrator" "$(cat "$outside_launcher")" "scripts/orchestrate.sh"
-  assert_contains "outside launcher passes task inline" "$(cat "$outside_launcher")" "tabs\\ should\\ actually\\ exist"
+  assert_contains "shows planning phase" "$output" "Planning"
+  assert_contains "shows implementing phase" "$output" "Implementing"
+  assert_contains "shows review phase" "$output" "Review Loop"
+  assert_contains "approved" "$output" "APPROVED"
+  assert_file_exists "state file exists" "$sf"
+  assert_eq "final phase is complete" "complete" "$(jq -r '.phase' "$sf")"
+  assert_eq "active is false" "false" "$(jq -r '.active' "$sf")"
 
-  : > "$zellij_log"
-  rm -f "$captured_layout"
-  PATH="$mock_bin:$PATH" ZELLIJ=1 "$PROJECT_ROOT/captain-codex" "tabs should actually exist" >/dev/null 2>&1
-
-  local inside_log inside_layout inside_launcher
-  inside_log=$(cat "$zellij_log")
-  inside_layout=$(cat "$captured_layout")
-  assert_contains "inside zellij still uses layout flag" "$inside_log" $'---\n-l'
-  assert_not_contains "inside zellij does not use action subcommands" "$inside_log" "action"
-  assert_contains "inside layout has Captain tab" "$inside_layout" 'tab name="Captain"'
-  assert_contains "inside layout has Codex tab" "$inside_layout" 'tab name="Codex"'
-  assert_contains "inside layout has Claude tab" "$inside_layout" 'tab name="Claude"'
-
-  inside_launcher=$(sed -n 's/.*args "-c" "\(.*\)"/\1/p' "$captured_layout")
-  assert_contains "inside launcher runs orchestrator" "$(cat "$inside_launcher")" "scripts/orchestrate.sh"
-  assert_contains "inside launcher passes task inline" "$(cat "$inside_launcher")" "tabs\\ should\\ actually\\ exist"
-
-  rm -rf "$mock_bin"
-}
-
-test_layout_generation() {
-  echo "Test: layout template substitution"
-
-  local layout_template="$PROJECT_ROOT/templates/zellij-layout.kdl"
-  local generated="/tmp/captain-codex-test-layout-$$.kdl"
-  local test_cmd="/path/to/orchestrate.sh 'my task'"
-
-  sed "s|CAPTAIN_CMD_PLACEHOLDER|$test_cmd|g" "$layout_template" > "$generated"
-
-  assert_contains "layout has command" "$(cat "$generated")" "/path/to/orchestrate.sh"
-  assert_contains "layout has Captain tab" "$(cat "$generated")" 'tab name="Captain"'
-  assert_contains "layout has Codex tab" "$(cat "$generated")" 'tab name="Codex"'
-  assert_contains "layout has Claude tab" "$(cat "$generated")" 'tab name="Claude"'
-  rm -f "$generated"
-}
-
-# ── Integration Tests (zellij + mock agents via PTY) ─────────────────────────
-
-WITH_PTY="$TESTS_DIR/with-pty.py"
-
-# Helper: run a command inside a fresh zellij session via a layout.
-# Uses with-pty.py to allocate a pseudo-terminal so zellij can start
-# even without a controlling TTY (CI, Claude Code, etc.).
-#
-# Args:
-#   $1 — test script path to run inside a zellij pane
-#   $2 — timeout in seconds (default: 15)
-ZELLIJ_TEST_SESSION=""
-
-run_in_zellij() {
-  local test_script="$1"
-  local timeout="${2:-15}"
-  local layout_file="/tmp/captain-zellij-test-layout-$$.kdl"
-  ZELLIJ_TEST_SESSION="captain-test-$$-$(date +%s)"
-
-  cat > "$layout_file" <<LAYOUT
-layout {
-    tab name="TestRunner" focus=true {
-        pane {
-            command "bash"
-            args "-c" "$test_script"
-        }
-    }
-}
-LAYOUT
-
-  # pty.spawn blocks until zellij exits. Since zellij waits for a
-  # keypress after the pane command finishes, we rely on PTY_TIMEOUT
-  # to kill it. The test results are written to files before the
-  # timeout, so assertions still work. Exit code 124 = expected timeout.
-  PTY_TIMEOUT="$timeout" python3 "$WITH_PTY" \
-    zellij -s "$ZELLIJ_TEST_SESSION" -n "$layout_file" \
-    >/dev/null 2>&1 || true
-
-  # Cleanup any leftover session
-  zellij kill-session "$ZELLIJ_TEST_SESSION" 2>/dev/null || true
-
-  rm -f "$layout_file"
-}
-
-test_zellij_session_lifecycle() {
-  echo "Test: zellij session starts and exits cleanly"
-
-  # Simple test: start zellij, verify we can query tabs, exit
-  local test_script="/tmp/captain-zellij-test-lifecycle-$$.sh"
-  cat > "$test_script" <<'SCRIPT'
-#!/usr/bin/env bash
-sleep 1
-tabs=$(zellij action query-tab-names 2>&1)
-echo "$tabs" > /tmp/captain-zellij-lifecycle-result.txt
-echo "done" >> /tmp/captain-zellij-lifecycle-result.txt
-SCRIPT
-  chmod +x "$test_script"
-
-  rm -f /tmp/captain-zellij-lifecycle-result.txt
-  run_in_zellij "$test_script" 5
-
-  if [[ -f /tmp/captain-zellij-lifecycle-result.txt ]]; then
-    local result
-    result=$(cat /tmp/captain-zellij-lifecycle-result.txt)
-    assert_contains "session has TestRunner tab" "$result" "TestRunner"
-    assert_contains "lifecycle completes" "$result" "done"
+  # Check plan file was created
+  local plan_files
+  plan_files=$(find "$workdir/tasks" -name "*.md" 2>/dev/null | head -1)
+  if [[ -n "$plan_files" ]]; then
+    pass "plan file created"
   else
-    fail "zellij lifecycle" "result file not created — zellij may not have started"
+    fail "plan file created" "no .md files in tasks/"
   fi
 
-  rm -f "$test_script" /tmp/captain-zellij-lifecycle-result.txt
+  rm -rf "$workdir" "/tmp/mock-codex-integ-$$"
 }
 
-test_zellij_tab_communication() {
-  echo "Test: zellij tab creation and write-chars"
+test_full_orchestration_reject_then_approve() {
+  echo "Test: full orchestration — reject once, then approve"
 
-  local test_script="/tmp/captain-zellij-test-tabs-$$.sh"
-  local result_file="/tmp/captain-zellij-tabs-result-$$.txt"
+  local workdir
+  workdir=$(mktemp -d /tmp/captain-codex-integ-XXXXXX)
+  mkdir -p "$workdir/.claude-architect" "$workdir/tasks"
 
-  cat > "$test_script" <<SCRIPT
-#!/usr/bin/env bash
-sleep 1
+  local state_file="/tmp/mock-codex-integ-reject-$$"
+  rm -f "$state_file"
 
-# Create a second tab
-zellij action new-tab -n "AgentTab"
-sleep 0.5
+  local output
+  output=$(
+    cd "$workdir"
+    PATH="$MOCK_BIN:$PATH" \
+    MOCK_CODEX_REJECT_ROUNDS=1 \
+    MOCK_CODEX_STATE_FILE="$state_file" \
+      "$PROJECT_ROOT/scripts/orchestrate.sh" "test reject flow" 2>&1
+  ) || true
 
-# Verify both tabs exist
-tabs=\$(zellij action query-tab-names 2>&1)
-echo "tabs=\$tabs" > $result_file
+  local sf="$workdir/.claude-architect/state.json"
 
-# Switch to AgentTab and write characters
-zellij action go-to-tab-name "AgentTab"
-sleep 0.3
-zellij action write-chars "echo HELLO_FROM_AGENT"
-zellij action write 13  # Enter
-sleep 1
+  assert_contains "shows rejection" "$output" "REJECT"
+  assert_contains "sends feedback" "$output" "Sending feedback"
+  assert_contains "eventually approved" "$output" "APPROVED"
+  assert_eq "final phase is complete" "complete" "$(jq -r '.phase' "$sf")"
 
-# Dump AgentTab screen
-zellij action dump-screen /tmp/captain-zellij-tabs-screen-$$.txt -f 2>/dev/null
-if [[ -f /tmp/captain-zellij-tabs-screen-$$.txt ]]; then
-  echo "screen_content=\$(cat /tmp/captain-zellij-tabs-screen-$$.txt)" >> $result_file
-  if grep -q "HELLO_FROM_AGENT" /tmp/captain-zellij-tabs-screen-$$.txt; then
-    echo "write_chars_worked=yes" >> $result_file
-  else
-    echo "write_chars_worked=no" >> $result_file
-  fi
-fi
+  local history_count
+  history_count=$(jq '.review_history | length' "$sf")
+  assert_eq "2 review rounds" "2" "$history_count"
+  assert_eq "round 1 rejected" "REJECT" "$(jq -r '.review_history[0].verdict' "$sf")"
+  assert_eq "round 2 approved" "APPROVE" "$(jq -r '.review_history[1].verdict' "$sf")"
 
-echo "done" >> $result_file
-
-# Close the extra tab
-zellij action close-tab
-SCRIPT
-  chmod +x "$test_script"
-
-  rm -f "$result_file" "/tmp/captain-zellij-tabs-screen-$$.txt"
-  run_in_zellij "$test_script" 8
-
-  if [[ -f "$result_file" ]]; then
-    local result
-    result=$(cat "$result_file")
-    assert_contains "second tab created" "$result" "AgentTab"
-    assert_contains "write-chars delivered" "$result" "write_chars_worked=yes"
-    assert_contains "tab test completes" "$result" "done"
-  else
-    fail "tab communication" "result file not created"
-  fi
-
-  rm -f "$test_script" "$result_file" "/tmp/captain-zellij-tabs-screen-$$."*
+  rm -rf "$workdir" "$state_file"
 }
 
-test_zellij_orchestrator_flow() {
-  echo "Test: orchestrator flow with mock agents in zellij"
+test_skip_plan() {
+  echo "Test: --skip-plan skips planning phase"
 
-  local test_workdir
-  test_workdir=$(mktemp -d /tmp/captain-codex-integ-XXXXXX)
-  mkdir -p "$test_workdir/.claude-architect" "$test_workdir/tasks"
+  local workdir
+  workdir=$(mktemp -d /tmp/captain-codex-integ-XXXXXX)
+  mkdir -p "$workdir/.claude-architect" "$workdir/tasks"
 
-  # Copy default config
-  cp "$PROJECT_ROOT/templates/default-config.json" "$test_workdir/.claude-architect/config.json"
+  # Create a pre-existing plan
+  cat > "$workdir/tasks/existing-plan.md" <<'PLAN'
+# Existing Plan
 
-  local result_file="/tmp/captain-zellij-orch-result-$$.txt"
-  local mock_bin_abs="$TESTS_DIR/mock-bin"
+## Objective
+Do the thing.
 
-  # The test script runs inside zellij as the "Captain" pane.
-  # It sets up tabs with mock agents, sends prompts, and verifies the flow.
-  local test_script="/tmp/captain-zellij-test-orch-$$.sh"
-  # Use full paths to mock agents — new tabs get their own shell with default PATH
-  local mock_codex="$mock_bin_abs/codex"
-  local mock_claude="$mock_bin_abs/claude"
+## Steps
+1. Step one
+PLAN
 
-  cat > "$test_script" <<SCRIPT
-#!/usr/bin/env bash
-set -euo pipefail
+  local output
+  output=$(
+    cd "$workdir"
+    PATH="$MOCK_BIN:$PATH" \
+    SKIP_PLAN="tasks/existing-plan.md" \
+    MOCK_CODEX_REVIEW_VERDICT=APPROVE \
+    MOCK_CODEX_STATE_FILE="/tmp/mock-codex-integ-skip-$$" \
+      "$PROJECT_ROOT/scripts/orchestrate.sh" "(resuming)" 2>&1
+  ) || true
 
-cd "$test_workdir"
-sleep 1
+  assert_not_contains "no planning phase" "$output" "Planning (Codex)"
+  assert_contains "has implementing phase" "$output" "Implementing"
+  assert_contains "approved" "$output" "APPROVED"
 
-# Create Codex tab and start mock codex (using full path)
-zellij action new-tab -n "Codex"
-sleep 0.5
-zellij action write-chars "$mock_codex"
-zellij action write 13
-sleep 1
+  rm -rf "$workdir" "/tmp/mock-codex-integ-skip-$$"
+}
 
-# Create Claude tab and start mock claude (using full path)
-zellij action new-tab -n "Claude"
-sleep 0.5
-zellij action write-chars "$mock_claude"
-zellij action write 13
-sleep 1
+test_max_rounds_exceeded() {
+  echo "Test: max rounds exceeded results in failure"
 
-# Verify all tabs exist
-tabs=\$(zellij action query-tab-names 2>&1)
-echo "tabs=\$tabs" > $result_file
+  local workdir
+  workdir=$(mktemp -d /tmp/captain-codex-integ-XXXXXX)
+  mkdir -p "$workdir/.claude-architect" "$workdir/tasks"
 
-# Send a plan prompt to Codex
-zellij action go-to-tab-name "Codex"
-sleep 0.3
-zellij action write-chars "Formalize your plan and save it to: $test_workdir/tasks/test-plan.md. Write the file now."
-zellij action write 13
-sleep 2
+  local output
+  output=$(
+    cd "$workdir"
+    PATH="$MOCK_BIN:$PATH" \
+    MAX_ROUNDS=1 \
+    MOCK_CODEX_REJECT_ROUNDS=999 \
+    MOCK_CODEX_STATE_FILE="/tmp/mock-codex-integ-max-$$" \
+      "$PROJECT_ROOT/scripts/orchestrate.sh" "test max rounds" 2>&1
+  ) || true
 
-# Check if plan file was created
-if [[ -f "$test_workdir/tasks/test-plan.md" ]]; then
-  echo "plan_created=yes" >> $result_file
-else
-  echo "plan_created=no" >> $result_file
-fi
+  local sf="$workdir/.claude-architect/state.json"
 
-# Send implement prompt to Claude
-zellij action go-to-tab-name "Claude"
-sleep 0.3
-zellij action write-chars "Implement the plan. plan_contents here."
-zellij action write 13
-sleep 2
+  assert_contains "shows max rounds" "$output" "Max rounds"
+  assert_eq "phase is failed" "failed" "$(jq -r '.phase' "$sf")"
 
-# Dump Claude screen to verify it responded
-zellij action dump-screen /tmp/captain-zellij-claude-screen-$$.txt -f 2>/dev/null
-if grep -q "Implementing" /tmp/captain-zellij-claude-screen-$$.txt 2>/dev/null; then
-  echo "claude_responded=yes" >> $result_file
-else
-  echo "claude_responded=no" >> $result_file
-fi
-
-# Send review prompt to Codex
-zellij action go-to-tab-name "Codex"
-sleep 0.3
-zellij action write-chars "Review this implementation against the plan."
-zellij action write 13
-sleep 2
-
-# Dump Codex screen to check for verdict
-zellij action dump-screen /tmp/captain-zellij-codex-screen-$$.txt -f 2>/dev/null
-if grep -q "VERDICT: APPROVE" /tmp/captain-zellij-codex-screen-$$.txt 2>/dev/null; then
-  echo "review_verdict=APPROVE" >> $result_file
-else
-  echo "review_verdict=missing" >> $result_file
-fi
-
-echo "done" >> $result_file
-
-# Close extra tabs
-zellij action go-to-tab-name "Claude"
-sleep 0.2
-zellij action close-tab
-zellij action go-to-tab-name "Codex"
-sleep 0.2
-zellij action close-tab
-SCRIPT
-  chmod +x "$test_script"
-
-  rm -f "$result_file" /tmp/captain-zellij-*-screen-$$.txt
-  run_in_zellij "$test_script" 15
-
-  if [[ -f "$result_file" ]]; then
-    local result
-    result=$(cat "$result_file")
-    assert_contains "tabs created" "$result" "Codex"
-    assert_contains "plan file created by mock codex" "$result" "plan_created=yes"
-    assert_contains "claude responded to prompt" "$result" "claude_responded=yes"
-    assert_contains "codex review returned verdict" "$result" "review_verdict=APPROVE"
-    assert_contains "orchestrator flow completes" "$result" "done"
-  else
-    fail "orchestrator flow" "result file not created — zellij may not have started"
-  fi
-
-  rm -rf "$test_workdir" "$test_script" "$result_file" /tmp/captain-zellij-*-screen-$$.*
+  rm -rf "$workdir" "/tmp/mock-codex-integ-max-$$"
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -605,26 +406,14 @@ main() {
   test_prompt_builders
   test_entry_point_flags
   test_entry_point_dep_check
-  test_entry_point_uses_single_layout_launch_path
-  test_layout_generation
 
   if [[ "$RUN_INTEGRATION" == "true" ]]; then
-    if [[ -n "${ZELLIJ:-}" ]]; then
-      echo ""
-      echo "SKIP: Integration tests cannot run inside zellij."
-    elif ! command -v zellij &>/dev/null; then
-      echo ""
-      echo "SKIP: Integration tests need zellij installed."
-    elif ! command -v python3 &>/dev/null; then
-      echo ""
-      echo "SKIP: Integration tests need python3 (for PTY allocation)."
-    else
-      echo ""
-      echo "── Integration Tests (zellij + mock agents) ──"
-      test_zellij_session_lifecycle
-      test_zellij_tab_communication
-      test_zellij_orchestrator_flow
-    fi
+    echo ""
+    echo "── Integration Tests (mock agents) ──"
+    test_full_orchestration_approve
+    test_full_orchestration_reject_then_approve
+    test_skip_plan
+    test_max_rounds_exceeded
   fi
 
   # Summary

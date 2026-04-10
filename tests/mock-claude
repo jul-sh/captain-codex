@@ -1,39 +1,31 @@
 #!/usr/bin/env bash
 # Mock claude CLI for testing
-# Simulates an interactive claude session: shows prompt, reads input, responds.
+# Simulates `claude -p --output-format text --dangerously-skip-permissions < prompt.md`
+#
+# Reads prompt from stdin, produces response on stdout, exits.
 
-echo "Claude Code (mock)"
-echo ""
+# Parse flags (mimic claude -p interface)
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -p|--print) shift ;;
+    --output-format) shift 2 ;;
+    --dangerously-skip-permissions) shift ;;
+    *) shift ;;
+  esac
+done
 
-while true; do
-  # Show idle prompt
-  printf "> "
+# Read prompt from stdin
+input=$(cat)
 
-  # Read user input
-  if ! read -r input; then
-    break
-  fi
+if echo "$input" | grep -qi "implement\|plan_contents\|Autonomy"; then
+  echo "Implementing the plan..."
+  echo "Created necessary files and wrote code."
+  echo "All steps completed."
 
-  [[ -z "$input" ]] && continue
-
-  # Check if this is a file-read instruction
-  if [[ "$input" == *"Read and follow the instructions in "* ]]; then
-    filepath=$(echo "$input" | sed 's/.*Read and follow the instructions in //' | tr -d ' ')
-    if [[ -f "$filepath" ]]; then
-      input=$(cat "$filepath")
-    fi
-  fi
-
-  if echo "$input" | grep -qi "implement\|plan_contents\|Autonomy"; then
-    echo "Implementing the plan..."
-    sleep 0.5
-    echo "Created necessary files and wrote code."
-    echo "All steps completed."
-
-    # Write a worklog to the plan file if we can find it
-    plan_file=$(echo "$input" | grep -oE '[^ ]*tasks/[^ ]*\.md' | head -1)
-    if [[ -n "$plan_file" && -f "$plan_file" ]]; then
-      cat >> "$plan_file" <<'WORKLOG'
+  # Write a worklog to the plan file if we can find it
+  plan_file=$(echo "$input" | grep -oE '[^ ]*tasks/[^ ]*\.md' | head -1)
+  if [[ -n "$plan_file" && -f "$plan_file" ]]; then
+    cat >> "$plan_file" <<'WORKLOG'
 
 ## Worklog
 
@@ -48,14 +40,11 @@ while true; do
 ### Step 3: Testing
 - Ran tests, all passing
 WORKLOG
-    fi
-  elif echo "$input" | grep -qi "REJECTED\|feedback\|address"; then
-    echo "Addressing review feedback..."
-    sleep 0.5
-    echo "Fixed the issues mentioned in the review."
-    echo "Updated error handling and added test coverage."
-  else
-    echo "Acknowledged: $(echo "$input" | head -c 80)"
   fi
-  echo ""
-done
+elif echo "$input" | grep -qi "REJECTED\|feedback\|address"; then
+  echo "Addressing review feedback..."
+  echo "Fixed the issues mentioned in the review."
+  echo "Updated error handling and added test coverage."
+else
+  echo "Acknowledged: $(echo "$input" | head -c 80)"
+fi

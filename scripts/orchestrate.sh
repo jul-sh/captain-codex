@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# captain-codex zellij-native orchestrator
-# Runs in the "Captain" pane. Coordinates Codex (planning/review) and
-# Claude (implementation) via one-shot CLI commands in their own panes.
+# captain-codex orchestrator
+# Coordinates Codex (planning/review) and Claude (implementation) as
+# direct subprocess calls. No terminal multiplexer needed.
 #
 # Usage: orchestrate.sh <task> [options]
 #   Options are passed as environment variables:
@@ -74,13 +74,11 @@ trap cleanup_tmp EXIT
 # ══════════════════════════════════════════════════════════════════════════════
 
 run_planning() {
-  log_status "═══ Planning ═══"
+  log_status "═══ Planning (Codex) ═══"
 
-  # Build the plan prompt and write it to a file
   local plan_prompt
   plan_prompt=$(build_plan_prompt "$task" "$config")
 
-  # Append instruction to save the plan to the expected path
   plan_prompt="${plan_prompt}
 
 IMPORTANT: When you are done, save your complete implementation plan to: $plan_path"
@@ -89,27 +87,16 @@ IMPORTANT: When you are done, save your complete implementation plan to: $plan_p
   printf '%s\n' "$plan_prompt" > "$prompt_file"
 
   local output_file="$CAPTAIN_TMP/plan-output.md"
-  local done_file="$CAPTAIN_TMP/plan-done"
 
-  log_status "Running Codex planning..."
-  run_codex "$prompt_file" "$output_file" "$done_file"
-
-  wait_for_file "$done_file" || {
-    log_status "ERROR: Codex planning timed out"
-    mark_failed "Codex planning timed out"
+  run_codex "$prompt_file" "$output_file" || {
+    log_status "ERROR: Codex planning failed"
+    mark_failed "Codex planning failed"
     exit 1
   }
 
-  if ! check_exit_code "${done_file}.exit"; then
-    log_status "ERROR: Codex planning failed (non-zero exit)"
-    mark_failed "Codex planning failed"
-    exit 1
-  fi
-
   # Verify plan file was created
   if [[ ! -f "$plan_path" ]]; then
-    log_status "Plan not at $plan_path, checking output..."
-    # Codex might have written the plan to the output file instead
+    log_status "Plan not at $plan_path, checking Codex output..."
     if [[ -f "$output_file" ]]; then
       cp "$output_file" "$plan_path"
       log_status "Copied Codex output to $plan_path"
@@ -128,7 +115,7 @@ IMPORTANT: When you are done, save your complete implementation plan to: $plan_p
 # ══════════════════════════════════════════════════════════════════════════════
 
 run_implementation() {
-  log_status "═══ Implementing ═══"
+  log_status "═══ Implementing (Claude) ═══"
 
   local impl_prompt
   impl_prompt=$(build_impl_prompt "$plan_path" "$config" "$adhoc_impl")
@@ -137,22 +124,13 @@ run_implementation() {
   printf '%s\n' "$impl_prompt" > "$prompt_file"
 
   local output_file="$CAPTAIN_TMP/impl-output.md"
-  local done_file="$CAPTAIN_TMP/impl-done"
 
-  log_status "Running Claude implementation..."
-  run_claude "$prompt_file" "$output_file" "$done_file"
-
-  wait_for_file "$done_file" || {
-    log_status "ERROR: Claude implementation timed out"
-    mark_failed "Claude implementation timed out"
+  run_claude "$prompt_file" "$output_file" || {
+    log_status "ERROR: Claude implementation failed"
+    mark_failed "Claude implementation failed"
     exit 1
   }
 
-  if ! check_exit_code "${done_file}.exit"; then
-    log_status "ERROR: Claude implementation failed (non-zero exit)"
-    mark_failed "Claude implementation failed"
-    exit 1
-  fi
   log_status "Implementation done."
 }
 
@@ -186,22 +164,13 @@ run_review_loop() {
     printf '%s\n' "$review_prompt" > "$review_prompt_file"
 
     local review_output="$CAPTAIN_TMP/review-output-r${round}.md"
-    local review_done="$CAPTAIN_TMP/review-done-r${round}"
 
     log_status "Codex reviewing..."
-    run_codex "$review_prompt_file" "$review_output" "$review_done"
-
-    wait_for_file "$review_done" || {
-      log_status "ERROR: Review timed out (round $round)"
-      mark_failed "Codex review timed out"
-      return 1
-    }
-
-    if ! check_exit_code "${review_done}.exit"; then
-      log_status "ERROR: Codex review failed (non-zero exit, round $round)"
+    run_codex "$review_prompt_file" "$review_output" || {
+      log_status "ERROR: Codex review failed (round $round)"
       mark_failed "Codex review failed"
       return 1
-    fi
+    }
 
     # Parse verdict from the output file
     local review_content=""
@@ -235,10 +204,8 @@ run_review_loop() {
           local override_file="$CAPTAIN_TMP/override-r${round}.md"
           printf '%s\n' "$override_prompt" > "$override_file"
           local override_output="$CAPTAIN_TMP/override-output-r${round}.md"
-          local override_done="$CAPTAIN_TMP/override-done-r${round}"
 
-          run_claude "$override_file" "$override_output" "$override_done"
-          wait_for_file "$override_done" || {
+          run_claude "$override_file" "$override_output" || {
             mark_failed "Claude timed out"
             return 1
           }
@@ -275,15 +242,12 @@ $feedback"
       local fb_file="$CAPTAIN_TMP/feedback-r${round}.md"
       printf '%s\n' "$feedback_text" > "$fb_file"
       local fb_output="$CAPTAIN_TMP/feedback-output-r${round}.md"
-      local fb_done="$CAPTAIN_TMP/feedback-done-r${round}"
 
-      run_claude "$fb_file" "$fb_output" "$fb_done"
-
-      log_status "Claude fixing..."
-      wait_for_file "$fb_done" || {
+      run_claude "$fb_file" "$fb_output" || {
         mark_failed "Claude timed out"
         return 1
       }
+
       log_status "Round $round fixes done."
     fi
   done
@@ -298,8 +262,6 @@ main() {
   log_status "Task: $task"
   log_status "Rounds: $max_rounds | Supervised: $supervised"
   echo ""
-
-  wait_for_session || exit 1
 
   "$CAPTAIN_ROOT/scripts/config.sh" init-state "$task" "$plan_path" "$max_rounds" "$supervised" "$adhoc_review"
 

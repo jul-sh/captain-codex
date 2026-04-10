@@ -5,11 +5,6 @@
 #   config.sh write <key> <value>           — set a config value (dot notation)
 #   config.sh init-state <task> <plan> <max> <supervised> <adhoc_review> — initialize run state
 #
-# ⚠️  MANDATORY TIMEOUT: Every Bash tool call that invokes this script
-#     (or any other script in this directory) MUST set timeout: 2700000
-#     (45 minutes). The default 2-minute timeout will kill long-running
-#     commands like orchestrate.sh and codex, destroying the user's work.
-
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -71,15 +66,12 @@ init_state() {
 
   mkdir -p "$(dirname "$STATE_FILE")"
 
-  local zellij_session="${ZELLIJ_SESSION_NAME:-unknown}"
-
   jq -n \
     --arg task "$task" \
     --arg plan "$plan_file" \
     --argjson max "$max_rounds" \
     --argjson supervised "$supervised" \
     --arg adhoc_review "$adhoc_review" \
-    --arg zellij "$zellij_session" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '{
       active: true,
@@ -89,7 +81,6 @@ init_state() {
       round: 0,
       max_rounds: $max,
       supervised: $supervised,
-      zellij_session: $zellij,
       adhoc_review_instructions: (if $adhoc_review == "" then null else $adhoc_review end),
       review_history: [],
       started_at: $ts

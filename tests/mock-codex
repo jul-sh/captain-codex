@@ -1,70 +1,75 @@
 #!/usr/bin/env bash
 # Mock codex CLI for testing
-# Simulates an interactive codex session: shows prompt, reads input, responds.
+# Simulates `codex exec -o <output_file> --full-auto - < prompt.md`
 #
 # Behavior controlled by env vars:
 #   MOCK_CODEX_REVIEW_VERDICT — "APPROVE" or "REJECT" (default: APPROVE)
 #   MOCK_CODEX_REJECT_ROUNDS  — reject for this many rounds, then approve (default: 0)
 #
-# Ignores all flags (-m, -c, etc.)
+# State tracking for multi-round reviews:
+#   MOCK_CODEX_STATE_FILE — path to a file tracking review count across invocations
 
 review_verdict="${MOCK_CODEX_REVIEW_VERDICT:-APPROVE}"
 reject_rounds="${MOCK_CODEX_REJECT_ROUNDS:-0}"
+state_file="${MOCK_CODEX_STATE_FILE:-/tmp/mock-codex-state-$$}"
+
+# Parse flags (mimic codex exec interface)
+output_file=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    exec) shift ;;
+    -o) output_file="$2"; shift 2 ;;
+    --full-auto) shift ;;
+    -) shift ;;  # read from stdin
+    *) shift ;;
+  esac
+done
+
+# Read prompt from stdin
+input=$(cat)
+
+# Track review count across invocations
 review_count=0
+if [[ -f "$state_file" ]]; then
+  review_count=$(cat "$state_file")
+fi
 
-# Show startup banner
-echo "Codex CLI (mock)"
-echo ""
-
-while true; do
-  # Show idle prompt
-  printf "> "
-
-  # Read user input (one line)
-  if ! read -r input; then
-    break
+write_output() {
+  local text="$1"
+  echo "$text"
+  if [[ -n "$output_file" ]]; then
+    printf '%s\n' "$text" > "$output_file"
   fi
+}
 
-  # Skip empty input
-  [[ -z "$input" ]] && continue
+# Detect what kind of prompt this is
+if echo "$input" | grep -qi "review\|VERDICT\|implementation against"; then
+  review_count=$((review_count + 1))
+  echo "$review_count" > "$state_file"
 
-  # Check if this is a file-read instruction
-  if [[ "$input" == *"Read and follow the instructions in "* ]]; then
-    filepath=$(echo "$input" | sed 's/.*Read and follow the instructions in //' | tr -d ' ')
-    if [[ -f "$filepath" ]]; then
-      input=$(cat "$filepath")
-    fi
+  if [[ "$reject_rounds" -gt 0 && "$review_count" -le "$reject_rounds" ]]; then
+    write_output "Reviewing implementation...
+
+Issues found:
+- Missing error handling in main module
+- Test coverage is incomplete
+
+VERDICT: REJECT
+
+Please address the issues above before resubmitting."
+  else
+    write_output "Reviewing implementation...
+
+Implementation matches the plan. All criteria met.
+
+VERDICT: APPROVE"
   fi
-
-  # Detect what kind of prompt this is.
-  # Check review FIRST — review prompts often mention "the plan".
-  if echo "$input" | grep -qi "review\|VERDICT\|implementation against"; then
-    review_count=$((review_count + 1))
-    sleep 0.5
-
-    if [[ "$reject_rounds" -gt 0 && "$review_count" -le "$reject_rounds" ]]; then
-      echo "Reviewing implementation..."
-      echo ""
-      echo "Issues found:"
-      echo "- Missing error handling in main module"
-      echo "- Test coverage is incomplete"
-      echo ""
-      echo "VERDICT: REJECT"
-      echo ""
-      echo "Please address the issues above before resubmitting."
-    else
-      echo "Reviewing implementation..."
-      echo ""
-      echo "Implementation matches the plan. All criteria met."
-      echo ""
-      echo "VERDICT: APPROVE"
-    fi
-  elif echo "$input" | grep -qi "plan\|formalize.*plan\|delegatable"; then
-    # Planning request — check if we need to write a plan file
-    plan_path=$(echo "$input" | grep -oE '[^ ]*tasks/[^ ]*\.md' | head -1)
-    if [[ -n "$plan_path" ]]; then
-      mkdir -p "$(dirname "$plan_path")"
-      cat > "$plan_path" <<'PLAN'
+elif echo "$input" | grep -qi "plan\|formalize.*plan\|delegatable"; then
+  # Planning request — check if we need to write a plan file
+  plan_path=$(echo "$input" | grep -oE '[^ ]*tasks/[^ ]*\.md' | head -1)
+  if [[ -n "$plan_path" ]]; then
+    mkdir -p "$(dirname "$plan_path")"
+    cat > "$plan_path" <<'PLAN'
 # Mock Plan
 
 ## Objective
@@ -79,13 +84,11 @@ Implement the requested feature.
 - Feature works as described
 - Tests pass
 PLAN
-      echo "Plan written to $plan_path"
-    else
-      echo "I have analyzed the codebase and drafted a plan."
-      echo "The implementation should follow a modular approach."
-    fi
+    write_output "Plan written to $plan_path"
   else
-    echo "Acknowledged: $input"
+    write_output "I have analyzed the codebase and drafted a plan.
+The implementation should follow a modular approach."
   fi
-  echo ""
-done
+else
+  write_output "Acknowledged: $(echo "$input" | head -c 80)"
+fi

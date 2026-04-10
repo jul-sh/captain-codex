@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# captain-codex — Zellij-native orchestrator entry point
+# captain-codex — orchestrator entry point
 #
 # Usage:
 #   captain-codex <task description> [flags]
@@ -9,7 +9,7 @@
 #   --max-rounds <n>     Cap review iterations (default: from config)
 #   --supervised         Pause after planning and each review for human approval
 #
-# Requires: zellij, codex, claude, jq
+# Requires: codex, claude, jq
 
 set -euo pipefail
 
@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Dependency checks ─────────────────────────────────────────────────────────
 
-for cmd in zellij codex claude jq; do
+for cmd in codex claude jq; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "ERROR: '$cmd' is required but not found in PATH." >&2
     exit 1
@@ -63,44 +63,13 @@ if [[ -z "$task" ]]; then
   task="(resuming from existing plan: $skip_plan)"
 fi
 
-# ── Build zellij launch ───────────────────────────────────────────────────────
-# Generate a layout with three vertical panes (Captain, Codex, Claude) and hand
-# it to zellij. We pass task/flags via a launcher script so the orchestrator
-# does not depend on environment inheritance from the zellij server.
+# ── Launch orchestrator ───────────────────────────────────────────────────────
 
-layout_template="$SCRIPT_DIR/templates/zellij-layout.kdl"
-generated_layout="/tmp/captain-codex-layout-$$.kdl"
-launcher_script="/tmp/captain-codex-launch-$$.sh"
+export SKIP_PLAN="$skip_plan"
+export MAX_ROUNDS="$max_rounds"
+export SUPERVISED="$supervised"
+export ADHOC_PLAN="${ADHOC_PLAN:-}"
+export ADHOC_IMPL="${ADHOC_IMPL:-}"
+export ADHOC_REVIEW="${ADHOC_REVIEW:-}"
 
-adhoc_plan="${ADHOC_PLAN:-}"
-adhoc_impl="${ADHOC_IMPL:-}"
-adhoc_review="${ADHOC_REVIEW:-}"
-
-quoted_skip_plan=$(printf '%q' "$skip_plan")
-quoted_max_rounds=$(printf '%q' "$max_rounds")
-quoted_supervised=$(printf '%q' "$supervised")
-quoted_adhoc_plan=$(printf '%q' "$adhoc_plan")
-quoted_adhoc_impl=$(printf '%q' "$adhoc_impl")
-quoted_adhoc_review=$(printf '%q' "$adhoc_review")
-quoted_orchestrator=$(printf '%q' "$SCRIPT_DIR/scripts/orchestrate.sh")
-quoted_task=$(printf '%q' "$task")
-
-cat > "$launcher_script" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-export SKIP_PLAN=$quoted_skip_plan
-export MAX_ROUNDS=$quoted_max_rounds
-export SUPERVISED=$quoted_supervised
-export ADHOC_PLAN=$quoted_adhoc_plan
-export ADHOC_IMPL=$quoted_adhoc_impl
-export ADHOC_REVIEW=$quoted_adhoc_review
-exec $quoted_orchestrator $quoted_task
-EOF
-chmod +x "$launcher_script"
-
-escaped_launcher_cmd=$(echo "$launcher_script" | sed 's/\\/\\\\/g; s/"/\\"/g')
-sed "s|CAPTAIN_CMD_PLACEHOLDER|$escaped_launcher_cmd|g" \
-    "$layout_template" > "$generated_layout"
-
-echo "Launching captain-codex layout..."
-exec zellij -l "$generated_layout"
+exec "$SCRIPT_DIR/scripts/orchestrate.sh" "$task"

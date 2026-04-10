@@ -1,18 +1,10 @@
-# captain-codex
+# Agent Architecture
 
-Zellij-native orchestrator: Codex plans, Claude implements, Codex reviews — each in their own tab.
+captain-codex coordinates two agent CLIs:
 
-## Layout
+- **Codex** (`codex exec`): planning and code review
+- **Claude** (`claude -p`): implementation
 
-- `captain-codex` — standalone entry point script
-- `scripts/` — shell utilities (orchestrate, helpers, config, review prompt)
-- `templates/` — prompt skeletons, default config, zellij layout
+Both run as one-shot subprocesses. The orchestrator passes prompts via stdin and captures output via stdout and the `-o` flag. No interactive sessions, no terminal multiplexer.
 
-## Architecture
-
-Three zellij tabs: Captain (orchestrator), Codex (planning/review), Claude (implementation).
-The orchestrator in `scripts/orchestrate.sh` drives everything via `zellij action write-chars` and `dump-screen`.
-
-## Config resolution
-
-`templates/default-config.json` <- `~/.claude-architect/config.json` <- `.claude-architect/config.json`
+The review loop continues until Codex outputs `VERDICT: APPROVE` or the maximum number of rounds is reached.
