@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# captain-codex — orchestrator entry point
+#
+# Usage:
+#   captain-codex <task description> [flags]
+#
+# Flags:
+#   --skip-plan <path>   Use an existing plan file, skip planning phase
+#   --max-rounds <n>     Cap review iterations (default: from config)
+#   --supervised         Pause after planning and each review for human approval
+#
+# Requires: codex, claude, jq
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ── Dependency checks ─────────────────────────────────────────────────────────
+
+for cmd in codex claude jq; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "ERROR: '$cmd' is required but not found in PATH." >&2
+    exit 1
+  fi
+done
+
+# ── Parse flags ───────────────────────────────────────────────────────────────
+
+skip_plan=""
+max_rounds=""
+supervised="false"
+task_parts=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-plan)
+      skip_plan="$2"
+      shift 2
+      ;;
+    --max-rounds)
+      max_rounds="$2"
+      shift 2
+      ;;
+    --supervised)
+      supervised="true"
+      shift
+      ;;
+    *)
+      task_parts+=("$1")
+      shift
+      ;;
+  esac
+done
+
+task="${task_parts[*]:-}"
+if [[ -z "$task" && -z "$skip_plan" ]]; then
+  echo "Usage: captain-codex <task description> [--skip-plan <path>] [--max-rounds <n>] [--supervised]" >&2
+  exit 1
+fi
+
+# Default task description when skipping plan
+if [[ -z "$task" ]]; then
+  task="(resuming from existing plan: $skip_plan)"
+fi
+
+# ── Launch orchestrator ───────────────────────────────────────────────────────
+
+export SKIP_PLAN="$skip_plan"
+export MAX_ROUNDS="$max_rounds"
+export SUPERVISED="$supervised"
+export ADHOC_PLAN="${ADHOC_PLAN:-}"
+export ADHOC_IMPL="${ADHOC_IMPL:-}"
+export ADHOC_REVIEW="${ADHOC_REVIEW:-}"
+
+exec "$SCRIPT_DIR/scripts/orchestrate.sh" "$task"

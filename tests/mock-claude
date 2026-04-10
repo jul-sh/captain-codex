@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Mock claude CLI for testing
+# Simulates `claude -p --output-format text --dangerously-skip-permissions < prompt.md`
+#
+# Reads prompt from stdin, produces response on stdout, exits.
+
+# Parse flags (mimic claude -p interface)
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -p|--print) shift ;;
+    --output-format) shift 2 ;;
+    --dangerously-skip-permissions) shift ;;
+    *) shift ;;
+  esac
+done
+
+# Read prompt from stdin
+input=$(cat)
+
+if echo "$input" | grep -qi "implement\|plan_contents\|Autonomy"; then
+  echo "Implementing the plan..."
+  echo "Created necessary files and wrote code."
+  echo "All steps completed."
+
+  # Write a worklog to the plan file if we can find it
+  plan_file=$(echo "$input" | grep -oE '[^ ]*tasks/[^ ]*\.md' | head -1)
+  if [[ -n "$plan_file" && -f "$plan_file" ]]; then
+    cat >> "$plan_file" <<'WORKLOG'
+
+## Worklog
+
+### Step 1: Created files
+- Created main module
+- Added configuration
+
+### Step 2: Implementation
+- Wrote core logic
+- Added error handling
+
+### Step 3: Testing
+- Ran tests, all passing
+WORKLOG
+  fi
+elif echo "$input" | grep -qi "REJECTED\|feedback\|address"; then
+  echo "Addressing review feedback..."
+  echo "Fixed the issues mentioned in the review."
+  echo "Updated error handling and added test coverage."
+else
+  echo "Acknowledged: $(echo "$input" | head -c 80)"
+fi

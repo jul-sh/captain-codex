@@ -1,0 +1,13 @@
+{
+  "active": true,
+  "phase": "implementing",
+  "plan_file": "tasks/add-comprehensive-ipad-support-to-clipkitty.md",
+  "task_description": "Add comprehensive iPad support to ClipKitty",
+  "round": 0,
+  "max_rounds": 10,
+  "supervised": false,
+  "codex_session_id": null,
+  "adhoc_review_instructions": null,
+  "review_history": [],
+  "started_at": "2026-04-03T08:17:48Z"
+}

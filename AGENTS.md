@@ -1,14 +1,10 @@
-# captain-codex
+# Agent Architecture
 
-Claude Code plugin: Codex plans, Claude implements, Codex reviews.
+captain-codex coordinates two agent CLIs:
 
-## Layout
+- **Codex** (`codex exec`): planning and code review
+- **Claude** (`claude -p`): implementation
 
-- `commands/` — skill markdown files (the command definitions)
-- `hooks/` — shell scripts (Stop event hook)
-- `scripts/` — shell utilities (config, planning, review prompt)
-- `templates/` — prompt skeletons and default config
+Both run as one-shot subprocesses. The orchestrator passes prompts via stdin and captures output via stdout and the `-o` flag. No interactive sessions, no terminal multiplexer.
 
-## Config resolution
-
-`templates/default-config.json` ← `~/.claude-architect/config.json` ← `.claude-architect/config.json`
+The review loop continues until Codex outputs `VERDICT: APPROVE` or the maximum number of rounds is reached.
