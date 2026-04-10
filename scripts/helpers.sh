@@ -15,8 +15,6 @@ PHASE_TIMEOUT="${PHASE_TIMEOUT:-2700}"  # 45 minutes in seconds
 
 # ── Zellij session readiness ──────────────────────────────────────────────────
 
-# Wait until zellij action commands work. The session may not be ready
-# immediately when a layout pane command starts.
 wait_for_session() {
   local max_attempts=20
   local attempt=0
@@ -93,15 +91,46 @@ build_review_prompt() {
   "$CAPTAIN_ROOT/scripts/review-prompt.sh" "$plan_path"
 }
 
-# ── Agent execution ──────────────────────────────────────────────────────────
+# ── Pane interaction ─────────────────────────────────────────────────────────
 #
-# Agents run as background processes from the Captain pane. Their output
-# streams to log files that the Codex/Claude panes are tailing, so you
-# can watch progress live. The orchestrator polls for a sentinel file to
-# know when an agent is done. No pane focusing or write-chars needed.
+# Layout: Captain (left) | Codex (middle) | Claude (right)
+# We focus panes via move-focus, type commands with write-chars (preserving
+# full TTY colors/errors), and poll sentinel files for completion.
+
+focus_pane() {
+  local target="$1"
+  case "$target" in
+    Captain)
+      zellij action move-focus left 2>/dev/null || true
+      zellij action move-focus left 2>/dev/null || true
+      ;;
+    Codex)
+      zellij action move-focus left 2>/dev/null || true
+      zellij action move-focus left 2>/dev/null || true
+      zellij action move-focus right 2>/dev/null || true
+      ;;
+    Claude)
+      zellij action move-focus right 2>/dev/null || true
+      zellij action move-focus right 2>/dev/null || true
+      ;;
+  esac
+}
+
+send_to_pane() {
+  local pane_name="$1"
+  local text="$2"
+
+  focus_pane "$pane_name"
+  sleep 0.2
+  zellij action write-chars "$text"
+  zellij action write 13  # Enter
+  sleep 0.2
+  focus_pane "Captain"
+}
+
+# ── Sentinel-based completion ────────────────────────────────────────────────
 
 # Wait for a sentinel file to appear, with timeout.
-# Returns 0 when the file exists, 1 on timeout.
 wait_for_file() {
   local filepath="$1"
   local timeout="${2:-$PHASE_TIMEOUT}"
@@ -121,39 +150,42 @@ wait_for_file() {
   done
 }
 
-# Run codex exec as a background process.
-#   $1 — prompt file to pass via stdin
-#   $2 — output file for the last message (-o)
-#   $3 — sentinel file (touched on completion)
+# Read the exit code left by a pane command. Returns 0 if the agent exited 0.
+check_exit_code() {
+  local exit_file="$1"
+  if [[ -f "$exit_file" ]]; then
+    local code
+    code=$(cat "$exit_file")
+    return "${code:-1}"
+  fi
+  return 1
+}
+
+# ── Agent runners ────────────────────────────────────────────────────────────
+#
+# Each runner types a one-shot command into its pane. The command:
+#   1. Runs the agent CLI (full TTY — colors, progress, errors all visible)
+#   2. Saves the exit code to a file
+#   3. Touches a sentinel file so the orchestrator knows it's done
+
 run_codex() {
   local prompt_file="$1"
   local output_file="$2"
   local done_file="$3"
+  local exit_file="${done_file}.exit"
 
-  rm -f "$done_file"
-  (
-    codex exec -o "$output_file" --full-auto - < "$prompt_file" \
-      >> "$CAPTAIN_TMP/codex.log" 2>&1
-    touch "$done_file"
-  ) &
+  rm -f "$done_file" "$exit_file"
+  send_to_pane "Codex" "codex exec -o '$output_file' --full-auto - < '$prompt_file'; echo \$? > '$exit_file'; touch '$done_file'"
 }
 
-# Run claude -p as a background process.
-#   $1 — prompt file to pass via stdin
-#   $2 — output file for the response
-#   $3 — sentinel file (touched on completion)
 run_claude() {
   local prompt_file="$1"
   local output_file="$2"
   local done_file="$3"
+  local exit_file="${done_file}.exit"
 
-  rm -f "$done_file"
-  (
-    claude -p --output-format text --dangerously-skip-permissions \
-      < "$prompt_file" 2>> "$CAPTAIN_TMP/claude.log" \
-      | tee "$output_file" >> "$CAPTAIN_TMP/claude.log"
-    touch "$done_file"
-  ) &
+  rm -f "$done_file" "$exit_file"
+  send_to_pane "Claude" "claude -p --output-format text --dangerously-skip-permissions < '$prompt_file' | tee '$output_file'; echo \${PIPESTATUS[0]} > '$exit_file'; touch '$done_file'"
 }
 
 # ── State management ──────────────────────────────────────────────────────────

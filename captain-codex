@@ -85,16 +85,9 @@ quoted_adhoc_review=$(printf '%q' "$adhoc_review")
 quoted_orchestrator=$(printf '%q' "$SCRIPT_DIR/scripts/orchestrate.sh")
 quoted_task=$(printf '%q' "$task")
 
-# Create the tmp dir and log files before zellij starts, so the tail
-# commands in the layout panes don't fail.
-captain_tmp="/tmp/captain-codex-$$"
-mkdir -p "$captain_tmp"
-touch "$captain_tmp/codex.log" "$captain_tmp/claude.log"
-
 cat > "$launcher_script" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-export CAPTAIN_TMP=$captain_tmp
 export SKIP_PLAN=$quoted_skip_plan
 export MAX_ROUNDS=$quoted_max_rounds
 export SUPERVISED=$quoted_supervised
@@ -106,8 +99,7 @@ EOF
 chmod +x "$launcher_script"
 
 escaped_launcher_cmd=$(echo "$launcher_script" | sed 's/\\/\\\\/g; s/"/\\"/g')
-sed -e "s|CAPTAIN_CMD_PLACEHOLDER|$escaped_launcher_cmd|g" \
-    -e "s|CAPTAIN_TMP_PLACEHOLDER|$captain_tmp|g" \
+sed "s|CAPTAIN_CMD_PLACEHOLDER|$escaped_launcher_cmd|g" \
     "$layout_template" > "$generated_layout"
 
 echo "Launching captain-codex layout..."

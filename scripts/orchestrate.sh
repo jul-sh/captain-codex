@@ -100,6 +100,12 @@ IMPORTANT: When you are done, save your complete implementation plan to: $plan_p
     exit 1
   }
 
+  if ! check_exit_code "${done_file}.exit"; then
+    log_status "ERROR: Codex planning failed (non-zero exit)"
+    mark_failed "Codex planning failed"
+    exit 1
+  fi
+
   # Verify plan file was created
   if [[ ! -f "$plan_path" ]]; then
     log_status "Plan not at $plan_path, checking output..."
@@ -141,6 +147,12 @@ run_implementation() {
     mark_failed "Claude implementation timed out"
     exit 1
   }
+
+  if ! check_exit_code "${done_file}.exit"; then
+    log_status "ERROR: Claude implementation failed (non-zero exit)"
+    mark_failed "Claude implementation failed"
+    exit 1
+  fi
   log_status "Implementation done."
 }
 
@@ -184,6 +196,12 @@ run_review_loop() {
       mark_failed "Codex review timed out"
       return 1
     }
+
+    if ! check_exit_code "${review_done}.exit"; then
+      log_status "ERROR: Codex review failed (non-zero exit, round $round)"
+      mark_failed "Codex review failed"
+      return 1
+    fi
 
     # Parse verdict from the output file
     local review_content=""
