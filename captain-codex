@@ -63,11 +63,10 @@ if [[ -z "$task" ]]; then
   task="(resuming from existing plan: $skip_plan)"
 fi
 
-# ── Build a single zellij launch path ─────────────────────────────────────────
-# Always generate a layout and hand it to zellij. Outside zellij, this starts a
-# fresh session. Inside zellij, zellij adds the layout as tabs to the current
-# session. We pass task/flags via a launcher script so the orchestrator does not
-# depend on environment inheritance from the zellij server.
+# ── Build zellij launch ───────────────────────────────────────────────────────
+# Generate a layout with three vertical panes (Captain, Codex, Claude) and hand
+# it to zellij. We pass task/flags via a launcher script so the orchestrator
+# does not depend on environment inheritance from the zellij server.
 
 layout_template="$SCRIPT_DIR/templates/zellij-layout.kdl"
 generated_layout="/tmp/captain-codex-layout-$$.kdl"
@@ -86,9 +85,16 @@ quoted_adhoc_review=$(printf '%q' "$adhoc_review")
 quoted_orchestrator=$(printf '%q' "$SCRIPT_DIR/scripts/orchestrate.sh")
 quoted_task=$(printf '%q' "$task")
 
+# Create the tmp dir and log files before zellij starts, so the tail
+# commands in the layout panes don't fail.
+captain_tmp="/tmp/captain-codex-$$"
+mkdir -p "$captain_tmp"
+touch "$captain_tmp/codex.log" "$captain_tmp/claude.log"
+
 cat > "$launcher_script" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+export CAPTAIN_TMP=$captain_tmp
 export SKIP_PLAN=$quoted_skip_plan
 export MAX_ROUNDS=$quoted_max_rounds
 export SUPERVISED=$quoted_supervised
@@ -100,7 +106,9 @@ EOF
 chmod +x "$launcher_script"
 
 escaped_launcher_cmd=$(echo "$launcher_script" | sed 's/\\/\\\\/g; s/"/\\"/g')
-sed "s|CAPTAIN_CMD_PLACEHOLDER|$escaped_launcher_cmd|g" "$layout_template" > "$generated_layout"
+sed -e "s|CAPTAIN_CMD_PLACEHOLDER|$escaped_launcher_cmd|g" \
+    -e "s|CAPTAIN_TMP_PLACEHOLDER|$captain_tmp|g" \
+    "$layout_template" > "$generated_layout"
 
 echo "Launching captain-codex layout..."
 exec zellij -l "$generated_layout"

@@ -1,18 +1,29 @@
-// captain-codex zellij layout — three tabs: Captain, Codex, Claude
+// captain-codex zellij layout — three vertical panes: Captain, Codex, Claude
 // This is a template. The entry point script generates the actual layout
-// by substituting CAPTAIN_CMD_PLACEHOLDER with the real orchestrator command.
+// by substituting CAPTAIN_CMD_PLACEHOLDER and CAPTAIN_TMP_PLACEHOLDER.
+//
+// Codex and Claude panes tail their output logs. The orchestrator in the
+// Captain pane runs the agents as background processes that write to those logs.
 
 layout {
-    tab name="Captain" focus=true {
-        pane {
+    pane size=1 borderless=true {
+        plugin location="tab-bar"
+    }
+    pane split_direction="vertical" {
+        pane name="Captain" focus=true {
             command "bash"
             args "-c" "CAPTAIN_CMD_PLACEHOLDER"
         }
+        pane name="Codex" {
+            command "bash"
+            args "-c" "echo 'Waiting for orchestrator...'; tail -f CAPTAIN_TMP_PLACEHOLDER/codex.log 2>/dev/null || sleep infinity"
+        }
+        pane name="Claude" {
+            command "bash"
+            args "-c" "echo 'Waiting for orchestrator...'; tail -f CAPTAIN_TMP_PLACEHOLDER/claude.log 2>/dev/null || sleep infinity"
+        }
     }
-    tab name="Codex" {
-        pane
-    }
-    tab name="Claude" {
-        pane
+    pane size=2 borderless=true {
+        plugin location="status-bar"
     }
 }

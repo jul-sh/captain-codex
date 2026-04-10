@@ -93,116 +93,67 @@ build_review_prompt() {
   "$CAPTAIN_ROOT/scripts/review-prompt.sh" "$plan_path"
 }
 
-# ── Zellij tab interaction ────────────────────────────────────────────────────
-
-send_to_tab() {
-  local tab_name="$1"
-  local text="$2"
-
-  zellij action go-to-tab-name --create "$tab_name"
-  sleep 0.5  # let focus settle
-  zellij action write-chars "$text"
-  zellij action write 13  # Enter
-}
-
-# Deliver a long prompt by writing it to a temp file and instructing the agent
-# to read it. Returns the temp file path.
-deliver_prompt() {
-  local tab_name="$1"
-  local prompt_text="$2"
-  local label="${3:-prompt}"
-
-  local prompt_file="$CAPTAIN_TMP/${label}-$(date +%s).md"
-  printf '%s\n' "$prompt_text" > "$prompt_file"
-
-  send_to_tab "$tab_name" "Read and follow the instructions in $prompt_file"
-}
-
-# ── Idle detection via screen polling ─────────────────────────────────────────
+# ── Agent execution ──────────────────────────────────────────────────────────
 #
-# Polls dump-screen until:
-#   1. Screen content hash is stable across 2 consecutive polls
-#   2. The last non-empty lines match the agent's idle prompt pattern
-#
-# Args:
-#   $1 — tab name to monitor
-#   $2 — regex pattern for the idle prompt (ERE)
-#   $3 — timeout in seconds (optional, defaults to PHASE_TIMEOUT)
-#
-# Returns 0 on idle detected, 1 on timeout.
+# Agents run as background processes from the Captain pane. Their output
+# streams to log files that the Codex/Claude panes are tailing, so you
+# can watch progress live. The orchestrator polls for a sentinel file to
+# know when an agent is done. No pane focusing or write-chars needed.
 
-wait_for_idle() {
-  local tab_name="$1"
-  local prompt_pattern="$2"
-  local timeout="${3:-$PHASE_TIMEOUT}"
-
-  local screen_file="$CAPTAIN_TMP/screen-${tab_name}.txt"
-  local prev_hash=""
+# Wait for a sentinel file to appear, with timeout.
+# Returns 0 when the file exists, 1 on timeout.
+wait_for_file() {
+  local filepath="$1"
+  local timeout="${2:-$PHASE_TIMEOUT}"
   local start_time
   start_time=$(date +%s)
 
   while true; do
-    sleep "$POLL_INTERVAL"
-
+    if [[ -f "$filepath" ]]; then
+      return 0
+    fi
     local elapsed=$(( $(date +%s) - start_time ))
     if [[ "$elapsed" -ge "$timeout" ]]; then
-      echo "TIMEOUT: $tab_name did not become idle within ${timeout}s" >&2
+      echo "TIMEOUT: $filepath not created within ${timeout}s" >&2
       return 1
     fi
-
-    # Switch to target tab before each dump — dump-screen captures the focused pane,
-    # so we must ensure we're on the right tab even if the user navigated away.
-    zellij action go-to-tab-name "$tab_name" 2>/dev/null || true
-    zellij action dump-screen "$screen_file" -f 2>/dev/null || continue
-
-    local current_hash
-    current_hash=$(md5 -q "$screen_file" 2>/dev/null || md5sum "$screen_file" | cut -d' ' -f1)
-
-    # Screen must have stabilized
-    if [[ "$current_hash" == "$prev_hash" ]]; then
-      # Check the last non-empty lines for the prompt pattern
-      local tail_content
-      tail_content=$(grep -v '^[[:space:]]*$' "$screen_file" | tail -5)
-      if echo "$tail_content" | grep -qE "$prompt_pattern"; then
-        return 0
-      fi
-    fi
-
-    prev_hash="$current_hash"
+    sleep "$POLL_INTERVAL"
   done
 }
 
-# ── Screen content extraction ─────────────────────────────────────────────────
+# Run codex exec as a background process.
+#   $1 — prompt file to pass via stdin
+#   $2 — output file for the last message (-o)
+#   $3 — sentinel file (touched on completion)
+run_codex() {
+  local prompt_file="$1"
+  local output_file="$2"
+  local done_file="$3"
 
-# Dump full screen scrollback and return content
-dump_screen_content() {
-  local tab_name="$1"
-  local screen_file="$CAPTAIN_TMP/screen-${tab_name}-$(date +%s).txt"
-
-  zellij action go-to-tab-name "$tab_name"
-  sleep 0.3
-  zellij action dump-screen "$screen_file" -f
-  cat "$screen_file"
+  rm -f "$done_file"
+  (
+    codex exec -o "$output_file" --full-auto - < "$prompt_file" \
+      >> "$CAPTAIN_TMP/codex.log" 2>&1
+    touch "$done_file"
+  ) &
 }
 
-# Dump screen and return only content after the last occurrence of a marker.
-# Prevents matching stale output from earlier rounds.
-dump_screen_since() {
-  local tab_name="$1"
-  local marker="$2"
+# Run claude -p as a background process.
+#   $1 — prompt file to pass via stdin
+#   $2 — output file for the response
+#   $3 — sentinel file (touched on completion)
+run_claude() {
+  local prompt_file="$1"
+  local output_file="$2"
+  local done_file="$3"
 
-  local full_content
-  full_content=$(dump_screen_content "$tab_name")
-
-  # Find the LAST occurrence of marker and return everything after it
-  local line_num
-  line_num=$(echo "$full_content" | grep -n "$marker" | tail -1 | cut -d: -f1)
-  if [[ -n "$line_num" ]]; then
-    echo "$full_content" | tail -n +"$line_num"
-  else
-    # Marker not found — return full content as fallback
-    echo "$full_content"
-  fi
+  rm -f "$done_file"
+  (
+    claude -p --output-format text --dangerously-skip-permissions \
+      < "$prompt_file" 2>> "$CAPTAIN_TMP/claude.log" \
+      | tee "$output_file" >> "$CAPTAIN_TMP/claude.log"
+    touch "$done_file"
+  ) &
 }
 
 # ── State management ──────────────────────────────────────────────────────────

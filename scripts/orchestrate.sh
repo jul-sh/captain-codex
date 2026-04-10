@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # captain-codex zellij-native orchestrator
-# Runs in the "Captain" tab. Coordinates Codex (planning/review) and
-# Claude (implementation) across separate zellij tabs.
+# Runs in the "Captain" pane. Coordinates Codex (planning/review) and
+# Claude (implementation) via one-shot CLI commands in their own panes.
 #
 # Usage: orchestrate.sh <task> [options]
 #   Options are passed as environment variables:
@@ -65,49 +65,9 @@ else
   mkdir -p "$plans_dir"
 fi
 
-# Idle prompt patterns (ERE regex)
-# These match the input prompt lines of each agent's interactive mode.
-# Adjust if the agent CLI changes its prompt format.
-CODEX_IDLE_PATTERN='(^>|╰─>|❯)'
-CLAUDE_IDLE_PATTERN='(^>|╰─|❯)'
-
 # ── Cleanup on exit ───────────────────────────────────────────────────────────
 
 trap cleanup_tmp EXIT
-
-# ── Tab setup ─────────────────────────────────────────────────────────────────
-
-setup_tabs() {
-  zellij action go-to-tab-name --create "Codex"
-  log_status "Ensured Codex tab"
-
-  zellij action go-to-tab-name --create "Claude"
-  log_status "Ensured Claude tab"
-
-  zellij action go-to-tab-name --create "Captain"
-}
-
-# ── Start agent sessions ─────────────────────────────────────────────────────
-
-start_codex() {
-  log_status "Starting Codex..."
-  send_to_tab "Codex" "codex"
-  wait_for_idle "Codex" "$CODEX_IDLE_PATTERN" 120 || {
-    log_status "ERROR: Codex failed to start"
-    exit 1
-  }
-  log_status "Codex ready."
-}
-
-start_claude() {
-  log_status "Starting Claude..."
-  send_to_tab "Claude" "claude"
-  wait_for_idle "Claude" "$CLAUDE_IDLE_PATTERN" 120 || {
-    log_status "ERROR: Claude failed to start"
-    exit 1
-  }
-  log_status "Claude ready."
-}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Phase 1: Planning
@@ -116,39 +76,42 @@ start_claude() {
 run_planning() {
   log_status "═══ Planning ═══"
 
+  # Build the plan prompt and write it to a file
   local plan_prompt
   plan_prompt=$(build_plan_prompt "$task" "$config")
 
-  log_status "Sending plan prompt to Codex..."
-  deliver_prompt "Codex" "$plan_prompt" "plan-draft"
+  # Append instruction to save the plan to the expected path
+  plan_prompt="${plan_prompt}
 
-  log_status "Codex drafting plan..."
-  wait_for_idle "Codex" "$CODEX_IDLE_PATTERN" || {
+IMPORTANT: When you are done, save your complete implementation plan to: $plan_path"
+
+  local prompt_file="$CAPTAIN_TMP/plan-prompt.md"
+  printf '%s\n' "$plan_prompt" > "$prompt_file"
+
+  local output_file="$CAPTAIN_TMP/plan-output.md"
+  local done_file="$CAPTAIN_TMP/plan-done"
+
+  log_status "Running Codex planning..."
+  run_codex "$prompt_file" "$output_file" "$done_file"
+
+  wait_for_file "$done_file" || {
     log_status "ERROR: Codex planning timed out"
     mark_failed "Codex planning timed out"
     exit 1
   }
 
-  log_status "Formalizing plan..."
-  send_to_tab "Codex" "Formalize your plan into a delegatable implementation plan and save it to: $plan_path. Write the file now."
-
-  wait_for_idle "Codex" "$CODEX_IDLE_PATTERN" || {
-    log_status "ERROR: Codex formalization timed out"
-    mark_failed "Codex formalization timed out"
-    exit 1
-  }
-
-  # Verify plan file
+  # Verify plan file was created
   if [[ ! -f "$plan_path" ]]; then
-    log_status "Plan not found, retrying..."
-    send_to_tab "Codex" "The plan file was not created at $plan_path. Please write it now."
-    wait_for_idle "Codex" "$CODEX_IDLE_PATTERN" || true
-  fi
-
-  if [[ ! -f "$plan_path" ]]; then
-    log_status "ERROR: Plan file not created at $plan_path"
-    mark_failed "Plan file not created"
-    exit 1
+    log_status "Plan not at $plan_path, checking output..."
+    # Codex might have written the plan to the output file instead
+    if [[ -f "$output_file" ]]; then
+      cp "$output_file" "$plan_path"
+      log_status "Copied Codex output to $plan_path"
+    else
+      log_status "ERROR: Plan file not created at $plan_path"
+      mark_failed "Plan file not created"
+      exit 1
+    fi
   fi
 
   log_status "Plan: $plan_path"
@@ -164,12 +127,17 @@ run_implementation() {
   local impl_prompt
   impl_prompt=$(build_impl_prompt "$plan_path" "$config" "$adhoc_impl")
 
-  log_status "Sending plan to Claude..."
-  deliver_prompt "Claude" "$impl_prompt" "implement"
+  local prompt_file="$CAPTAIN_TMP/impl-prompt.md"
+  printf '%s\n' "$impl_prompt" > "$prompt_file"
 
-  log_status "Claude implementing..."
-  wait_for_idle "Claude" "$CLAUDE_IDLE_PATTERN" || {
-    log_status "ERROR: Claude timed out"
+  local output_file="$CAPTAIN_TMP/impl-output.md"
+  local done_file="$CAPTAIN_TMP/impl-done"
+
+  log_status "Running Claude implementation..."
+  run_claude "$prompt_file" "$output_file" "$done_file"
+
+  wait_for_file "$done_file" || {
+    log_status "ERROR: Claude implementation timed out"
     mark_failed "Claude implementation timed out"
     exit 1
   }
@@ -198,34 +166,40 @@ run_review_loop() {
     update_phase "review"
     update_round "$round"
 
+    # ── Review ──
     local review_prompt
     review_prompt=$(build_review_prompt "$plan_path")
 
+    local review_prompt_file="$CAPTAIN_TMP/review-prompt-r${round}.md"
+    printf '%s\n' "$review_prompt" > "$review_prompt_file"
+
+    local review_output="$CAPTAIN_TMP/review-output-r${round}.md"
+    local review_done="$CAPTAIN_TMP/review-done-r${round}"
+
     log_status "Codex reviewing..."
-    deliver_prompt "Codex" "$review_prompt" "review-round-$round"
+    run_codex "$review_prompt_file" "$review_output" "$review_done"
 
-    local review_marker="review-round-$round"
-
-    wait_for_idle "Codex" "$CODEX_IDLE_PATTERN" || {
+    wait_for_file "$review_done" || {
       log_status "ERROR: Review timed out (round $round)"
       mark_failed "Codex review timed out"
       return 1
     }
 
-    # Extract only this round's output
-    local screen_content
-    screen_content=$(dump_screen_since "Codex" "$review_marker")
+    # Parse verdict from the output file
+    local review_content=""
+    if [[ -f "$review_output" ]]; then
+      review_content=$(cat "$review_output")
+    fi
 
-    # Parse verdict
     local verdict="REJECT"
-    if echo "$screen_content" | grep -qi "VERDICT: APPROVE"; then
+    if echo "$review_content" | grep -qi "VERDICT: APPROVE"; then
       verdict="APPROVE"
     fi
 
     local summary
-    summary=$(echo "$screen_content" | sed -n '/VERDICT/,$ p' | head -c 2000)
+    summary=$(echo "$review_content" | sed -n '/VERDICT/,$ p' | head -c 2000)
     if [[ -z "$summary" ]]; then
-      summary=$(echo "$screen_content" | tail -c 500)
+      summary=$(echo "$review_content" | tail -c 500)
     fi
 
     add_review_entry "$round" "$verdict" "$summary"
@@ -238,8 +212,15 @@ run_review_loop() {
         if [[ "$user_input" == "reject" ]]; then
           log_status "User overrode approval."
           update_phase "implementing"
-          send_to_tab "Claude" "The review was approved by Codex but overridden by the user. Please continue refining the implementation."
-          wait_for_idle "Claude" "$CLAUDE_IDLE_PATTERN" || {
+
+          local override_prompt="The review was approved by Codex but overridden by the user. Please continue refining the implementation."
+          local override_file="$CAPTAIN_TMP/override-r${round}.md"
+          printf '%s\n' "$override_prompt" > "$override_file"
+          local override_output="$CAPTAIN_TMP/override-output-r${round}.md"
+          local override_done="$CAPTAIN_TMP/override-done-r${round}"
+
+          run_claude "$override_file" "$override_output" "$override_done"
+          wait_for_file "$override_done" || {
             mark_failed "Claude timed out"
             return 1
           }
@@ -253,9 +234,9 @@ run_review_loop() {
     else
       # REJECT — send feedback to Claude
       local feedback
-      feedback=$(echo "$screen_content" | sed -n '/VERDICT: REJECT/,$ p' | tail -n +2 | head -c 3000)
+      feedback=$(echo "$review_content" | sed -n '/VERDICT: REJECT/,$ p' | tail -n +2 | head -c 3000)
       if [[ -z "$feedback" ]]; then
-        feedback="Review rejected. Check Codex tab for details."
+        feedback="Review rejected. See review output for details."
       fi
 
       if [[ "$supervised" == "true" ]]; then
@@ -273,10 +254,15 @@ run_review_loop() {
 
 $feedback"
 
-      deliver_prompt "Claude" "$feedback_text" "feedback-round-$round"
+      local fb_file="$CAPTAIN_TMP/feedback-r${round}.md"
+      printf '%s\n' "$feedback_text" > "$fb_file"
+      local fb_output="$CAPTAIN_TMP/feedback-output-r${round}.md"
+      local fb_done="$CAPTAIN_TMP/feedback-done-r${round}"
+
+      run_claude "$fb_file" "$fb_output" "$fb_done"
 
       log_status "Claude fixing..."
-      wait_for_idle "Claude" "$CLAUDE_IDLE_PATTERN" || {
+      wait_for_file "$fb_done" || {
         mark_failed "Claude timed out"
         return 1
       }
@@ -296,9 +282,6 @@ main() {
   echo ""
 
   wait_for_session || exit 1
-  setup_tabs
-  start_codex
-  start_claude
 
   "$CAPTAIN_ROOT/scripts/config.sh" init-state "$task" "$plan_path" "$max_rounds" "$supervised" "$adhoc_review"
 
