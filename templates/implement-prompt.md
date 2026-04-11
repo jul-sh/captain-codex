@@ -21,3 +21,4 @@ This cycle continues until Codex approves or max rounds is hit.
 ## MANDATORY: Bash Timeout
 
 **Every Bash tool call MUST set `timeout: 2700000` (45 minutes).** The default timeout is too short and will kill your commands mid-execution.
+
