@@ -46,10 +46,10 @@ plan_prompt=$(cat "$SCRIPT_DIR/templates/plan-prompt.md")
 plan_prompt="${plan_prompt//\{\{task_description\}\}/$task}"
 plan_prompt="${plan_prompt//\{\{plan_instructions\}\}/$plan_instructions}"
 
-json_output=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --json 2>/dev/null) || {
+json_output=$(echo "$plan_prompt" | codex exec --sandbox workspace-write -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --json 2>/dev/null) || {
   echo "ERROR: Codex planning call 1 failed. Retrying..." >&2
   sleep 2
-  json_output=$(echo "$plan_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --json 2>/dev/null) || {
+  json_output=$(echo "$plan_prompt" | codex exec --sandbox workspace-write -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --json 2>/dev/null) || {
     echo "ERROR: Codex planning call 1 failed after retry." >&2
     exit 1
   }

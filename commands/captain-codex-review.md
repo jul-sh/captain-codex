@@ -43,7 +43,7 @@ Triggers a Codex review of the current implementation. Call this when you have f
    if [[ -n "$session_id" ]]; then
      codex_cmd+=(resume "$session_id")
    fi
-   codex_cmd+=(-m "$codex_model" -c "model_reasoning_effort=$codex_effort" --color never)
+   codex_cmd+=(--sandbox workspace-write -m "$codex_model" -c "model_reasoning_effort=$codex_effort" --color never)
    echo "$review_prompt" | "${codex_cmd[@]}"
    ```
    If the first attempt fails, retry once after a 2-second pause. If both fail, update state phase back to `"implementing"` and report the failure.
