@@ -72,19 +72,19 @@ formalize_prompt="Formalize your plan into a delegatable implementation plan and
 Write the file now."
 
 if [[ -n "$session_id" ]]; then
-  formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
+  formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" --sandbox workspace-write -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
     echo "ERROR: Codex planning call 2 failed. Retrying..." >&2
     sleep 2
-    formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
+    formalized=$(echo "$formalize_prompt" | codex exec resume "$session_id" --sandbox workspace-write -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
       echo "ERROR: Codex planning call 2 failed after retry." >&2
       exit 1
     }
   }
 else
-  formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
+  formalized=$(echo "$formalize_prompt" | codex exec --sandbox workspace-write -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
     echo "ERROR: Codex planning call 2 failed. Retrying..." >&2
     sleep 2
-    formalized=$(echo "$formalize_prompt" | codex exec -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
+    formalized=$(echo "$formalize_prompt" | codex exec --sandbox workspace-write -m "$codex_model" -c "model_reasoning_effort=$codex_effort" 2>/dev/null) || {
       echo "ERROR: Codex planning call 2 failed after retry." >&2
       exit 1
     }
