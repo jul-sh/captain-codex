@@ -30,15 +30,20 @@ setup() {
   mkdir -p "$TEST_WORKDIR/.claude-architect"
   mkdir -p "$TEST_WORKDIR/tasks"
 
-  if [[ ! -f "$HOME/.claude-architect/config.json" ]]; then
-    mkdir -p "$HOME/.claude-architect"
-    cp "$PROJECT_ROOT/templates/default-config.json" "$HOME/.claude-architect/config.json"
-  fi
+  # Isolate $HOME so tests don't read or write the developer's real
+  # ~/.claude-architect/config.json. config.sh ensures the user config
+  # exists by copying the default into it; we redirect that into the
+  # workdir.
+  TEST_HOME=$(mktemp -d /tmp/captain-codex-home-XXXXXX)
+  export HOME="$TEST_HOME"
+  mkdir -p "$HOME/.claude-architect"
+  cp "$PROJECT_ROOT/templates/default-config.json" "$HOME/.claude-architect/config.json"
 }
 
 teardown() {
   rm -rf "$MOCK_BIN"
   [[ -n "${TEST_WORKDIR:-}" ]] && rm -rf "$TEST_WORKDIR"
+  [[ -n "${TEST_HOME:-}" ]] && rm -rf "$TEST_HOME"
 }
 
 trap teardown EXIT
@@ -89,6 +94,36 @@ test_slug_generation() {
   assert_eq "lowercase + hyphens" "add-a-hello-world-endpoint" "$(generate_slug 'Add a Hello World Endpoint')"
   assert_eq "strip special chars" "refactor-auth-module" "$(generate_slug 'refactor auth -- module!!!')"
   assert_eq "truncate at 60" 60 "$(printf '%s' "$(generate_slug "$(printf 'a%.0s' {1..80})")" | wc -c | tr -d ' ')"
+
+  # Regression: multi-line task description must produce a single-line
+  # slug. Previously the embedded newlines flowed through and broke the
+  # downstream `sed s/{{slug}}/$slug/g` substitution.
+  local multiline_slug
+  multiline_slug=$(generate_slug 'first line
+second line
+third')
+  assert_eq "single line slug from multiline input" "first-line-second-line-third" "$multiline_slug"
+}
+
+test_verdict_anchor() {
+  echo "Test: verdict_is_approve is anchored"
+  source "$PROJECT_ROOT/scripts/helpers.sh" 2>/dev/null
+
+  # Plain APPROVE on its own line -> approve
+  if verdict_is_approve "VERDICT: APPROVE"; then pass "literal APPROVE"; else fail "literal APPROVE" "expected approve"; fi
+
+  # APPROVE inside a REJECT body must not flip the verdict
+  local sneaky="The implementation has issues.
+VERDICT: REJECT
+(For comparison, criteria for VERDICT: APPROVE would be ...)"
+  if verdict_is_approve "$sneaky"; then
+    fail "embedded APPROVE in REJECT body" "expected reject"
+  else
+    pass "embedded APPROVE in REJECT body"
+  fi
+
+  # Leading whitespace is permitted (some agents indent)
+  if verdict_is_approve "  VERDICT: APPROVE"; then pass "indented APPROVE"; else fail "indented APPROVE" "expected approve"; fi
 }
 
 test_config_init_state() {
@@ -233,6 +268,107 @@ test_prompt_builders() {
   rm -f /tmp/prompt-test-output.txt
 }
 
+test_pane_dispatch() {
+  echo "Test: pane_dispatch round-trips through a fifo"
+
+  # Synthesize a temp dir mimicking $CAPTAIN_TMP, with a "fake-agent" fifo
+  # and a tiny runner that mirrors agent-runner.sh's protocol: read one
+  # TSV line, write a sentinel with exit code 0, write some output to
+  # the named output file.
+  local tmp
+  tmp=$(mktemp -d /tmp/captain-codex-pane-XXXXXX)
+  mkfifo "$tmp/fake.fifo"
+
+  # Background fake runner.
+  (
+    IFS=$'\t' read -r prompt out sentinel < "$tmp/fake.fifo"
+    cp "$prompt" "$out"
+    printf '0\n' > "$sentinel.tmp"
+    mv "$sentinel.tmp" "$sentinel"
+  ) &
+  local runner_pid=$!
+
+  # Drive the dispatcher.
+  printf 'hello\n' > "$tmp/prompt"
+  (
+    export CAPTAIN_TMP="$tmp"
+    export CAPTAIN_ROOT="$PROJECT_ROOT"
+    export PANE_POLL_INTERVAL=0.05
+    export PANE_POLL_TIMEOUT=5
+    source "$PROJECT_ROOT/scripts/pane.sh"
+    pane_dispatch fake "$tmp/prompt" "$tmp/output"
+    echo "rc=$?"
+  ) > "$tmp/dispatch.log" 2>&1
+
+  wait "$runner_pid" 2>/dev/null || true
+
+  assert_contains "dispatch returned 0" "$(cat "$tmp/dispatch.log")" "rc=0"
+  assert_file_exists "output produced" "$tmp/output"
+  assert_eq "output contents" "hello" "$(cat "$tmp/output")"
+
+  rm -rf "$tmp"
+}
+
+test_pane_dispatch_propagates_exit_code() {
+  echo "Test: pane_dispatch returns the agent's exit code"
+
+  local tmp
+  tmp=$(mktemp -d /tmp/captain-codex-pane-XXXXXX)
+  mkfifo "$tmp/fake.fifo"
+
+  (
+    IFS=$'\t' read -r _ _ sentinel < "$tmp/fake.fifo"
+    printf '7\n' > "$sentinel.tmp"
+    mv "$sentinel.tmp" "$sentinel"
+  ) &
+  local runner_pid=$!
+
+  printf 'hi\n' > "$tmp/prompt"
+  local rc=0
+  (
+    export CAPTAIN_TMP="$tmp"
+    export CAPTAIN_ROOT="$PROJECT_ROOT"
+    export PANE_POLL_INTERVAL=0.05
+    export PANE_POLL_TIMEOUT=5
+    source "$PROJECT_ROOT/scripts/pane.sh"
+    pane_dispatch fake "$tmp/prompt" "$tmp/output"
+  ) || rc=$?
+
+  wait "$runner_pid" 2>/dev/null || true
+  assert_eq "exit code propagated" "7" "$rc"
+  rm -rf "$tmp"
+}
+
+test_pane_dispatch_timeout() {
+  echo "Test: pane_dispatch times out when no runner answers"
+
+  local tmp
+  tmp=$(mktemp -d /tmp/captain-codex-pane-XXXXXX)
+  mkfifo "$tmp/fake.fifo"
+
+  # No runner consumes the fifo. We open + immediately close a reader
+  # so the orchestrator's write doesn't itself block forever; then the
+  # runner-equivalent never produces a sentinel and we expect a timeout.
+  ( read -r _ < "$tmp/fake.fifo" ) &
+  local sink_pid=$!
+
+  printf 'hi\n' > "$tmp/prompt"
+  local rc=0
+  (
+    export CAPTAIN_TMP="$tmp"
+    export CAPTAIN_ROOT="$PROJECT_ROOT"
+    export PANE_POLL_INTERVAL=0.05
+    export PANE_POLL_TIMEOUT=0.3
+    source "$PROJECT_ROOT/scripts/pane.sh"
+    pane_dispatch fake "$tmp/prompt" "$tmp/output"
+  ) > "$tmp/dispatch.log" 2>&1 || rc=$?
+
+  wait "$sink_pid" 2>/dev/null || true
+  assert_eq "timeout exit code" "124" "$rc"
+  assert_contains "timeout message" "$(cat "$tmp/dispatch.log")" "timed out"
+  rm -rf "$tmp"
+}
+
 test_entry_point_flags() {
   echo "Test: entry point flag parsing"
 
@@ -360,6 +496,58 @@ PLAN
   rm -rf "$workdir" "/tmp/mock-codex-integ-skip-$$"
 }
 
+test_zellij_full_run() {
+  echo "Test: full orchestration in zellij mode (pty-driven)"
+
+  local workdir
+  workdir=$(mktemp -d /tmp/captain-codex-zellij-XXXXXX)
+  mkdir -p "$workdir/.claude-architect" "$workdir/tasks"
+
+  local session="captain-codex-test-$$"
+  local mock_state="/tmp/mock-codex-zellij-$$"
+  rm -f "$mock_state"
+
+  # Background watcher: when the orchestrator marks the run done,
+  # kill the zellij session so with-pty.py drains and exits.
+  local sf="$workdir/.claude-architect/state.json"
+  (
+    for _ in $(seq 1 300); do  # ~30s
+      if [[ -f "$sf" ]] && jq -e '.active == false' "$sf" >/dev/null 2>&1; then
+        sleep 0.5  # let the captain pane print its summary
+        zellij kill-session "$session" >/dev/null 2>&1 || true
+        return 0
+      fi
+      sleep 0.1
+    done
+    zellij kill-session "$session" >/dev/null 2>&1 || true
+  ) &
+  local watcher_pid=$!
+
+  # Drive captain-codex under a pty so zellij has a TTY.
+  (
+    cd "$workdir"
+    PATH="$MOCK_BIN:$PATH" \
+    MOCK_CODEX_REVIEW_VERDICT=APPROVE \
+    MOCK_CODEX_STATE_FILE="$mock_state" \
+    CAPTAIN_SESSION="$session" \
+    python3 "$TESTS_DIR/with-pty.py" 35 -- \
+      "$PROJECT_ROOT/captain-codex" "test zellij integration" >/dev/null 2>&1
+  ) || true
+
+  wait "$watcher_pid" 2>/dev/null || true
+  # Force-kill in case the watcher missed it.
+  zellij kill-session "$session" >/dev/null 2>&1 || true
+
+  local sf="$workdir/.claude-architect/state.json"
+  assert_file_exists "state file written" "$sf"
+  if [[ -f "$sf" ]]; then
+    assert_eq "final phase" "complete" "$(jq -r '.phase' "$sf")"
+    assert_eq "active false" "false" "$(jq -r '.active' "$sf")"
+  fi
+
+  rm -rf "$workdir" "$mock_state"
+}
+
 test_max_rounds_exceeded() {
   echo "Test: max rounds exceeded results in failure"
 
@@ -396,6 +584,7 @@ main() {
 
   echo "── Unit Tests ──"
   test_slug_generation
+  test_verdict_anchor
   test_config_read
   test_config_init_state
   test_state_helpers
@@ -404,16 +593,28 @@ main() {
   test_mock_codex_rejects_then_approves
   test_mock_claude_responds
   test_prompt_builders
+  test_pane_dispatch
+  test_pane_dispatch_propagates_exit_code
+  test_pane_dispatch_timeout
   test_entry_point_flags
   test_entry_point_dep_check
 
   if [[ "$RUN_INTEGRATION" == "true" ]]; then
     echo ""
-    echo "── Integration Tests (mock agents) ──"
+    echo "── Integration Tests (mock agents, inline mode) ──"
     test_full_orchestration_approve
     test_full_orchestration_reject_then_approve
     test_skip_plan
     test_max_rounds_exceeded
+
+    if command -v zellij >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+      echo ""
+      echo "── Integration Tests (zellij mode via pty) ──"
+      test_zellij_full_run
+    else
+      echo ""
+      echo "── Skipping zellij integration tests (need zellij + python3) ──"
+    fi
   fi
 
   # Summary

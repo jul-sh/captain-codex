@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
-# captain-codex orchestrator
-# Coordinates Codex (planning/review) and Claude (implementation) as
-# direct subprocess calls. No terminal multiplexer needed.
+# captain-codex orchestrator.
 #
-# Usage: orchestrate.sh <task> [options]
-#   Options are passed as environment variables:
-#     SKIP_PLAN=<path>    — skip planning, use existing plan
-#     MAX_ROUNDS=<n>      — cap review iterations
-#     SUPERVISED=true     — pause for human approval at checkpoints
-#     ADHOC_PLAN=<text>   — ad-hoc planning instructions
-#     ADHOC_IMPL=<text>   — ad-hoc implementation instructions
-#     ADHOC_REVIEW=<text> — ad-hoc review instructions
+# Coordinates Codex (planning/review) and Claude (implementation). When
+# CAPTAIN_USE_ZELLIJ=true, agent invocations are dispatched into named
+# zellij panes via fifos so the user can watch both agents live and
+# interrupt either one. Otherwise agents run as direct subprocesses
+# inheriting this script's TTY (the original inline behaviour).
+#
+# Usage: orchestrate.sh [<task>]
+#   Reads task from $CAPTAIN_TASK or $1.
+#
+#   Options come in via env vars:
+#     SKIP_PLAN=<path>          — skip planning, use existing plan
+#     MAX_ROUNDS=<n>            — cap review iterations
+#     SUPERVISED=true           — pause for human approval at checkpoints
+#     ADHOC_PLAN=<text>         — ad-hoc planning instructions
+#     ADHOC_IMPL=<text>         — ad-hoc implementation instructions
+#     ADHOC_REVIEW=<text>       — ad-hoc review instructions
+#     CAPTAIN_USE_ZELLIJ=true   — drive agent panes via zellij/fifos
+#     CAPTAIN_TMP=<path>        — shared temp dir (set by entry script)
+#     CAPTAIN_ROOT=<path>       — repo root (set by entry script)
 
 set -euo pipefail
 
@@ -179,7 +188,7 @@ run_review_loop() {
     fi
 
     local verdict="REJECT"
-    if echo "$review_content" | grep -qi "VERDICT: APPROVE"; then
+    if verdict_is_approve "$review_content"; then
       verdict="APPROVE"
     fi
 
@@ -260,6 +269,9 @@ $feedback"
 main() {
   log_status "captain-codex"
   log_status "Task: $task"
+  if [[ "$CAPTAIN_USE_ZELLIJ" == "true" ]]; then
+    log_status "Mode: zellij (codex pane: top-left, claude pane: top-right, this is captain)"
+  fi
   log_status "Rounds: $max_rounds | Supervised: $supervised"
   echo ""
 

@@ -2,21 +2,34 @@
 # captain-codex shared helpers
 # Source this file: source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
-# Resolve project root
-CAPTAIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve project root if not pre-set by the entry script.
+CAPTAIN_ROOT="${CAPTAIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
-# Temp directory for this orchestration run
+# Temp directory for this orchestration run. The entry script sets this
+# to a session-specific path; if we're sourced standalone (e.g. tests),
+# fall back to a per-pid path.
 CAPTAIN_TMP="${CAPTAIN_TMP:-/tmp/captain-codex-$$}"
 mkdir -p "$CAPTAIN_TMP"
 
-# Timeout for each agent phase (seconds)
-PHASE_TIMEOUT="${PHASE_TIMEOUT:-2700}"  # 45 minutes
+# Whether the orchestrator drives agent panes via zellij. When false,
+# agents run as direct subprocesses inheriting the orchestrator's TTY.
+CAPTAIN_USE_ZELLIJ="${CAPTAIN_USE_ZELLIJ:-false}"
+
+if [[ "$CAPTAIN_USE_ZELLIJ" == "true" ]]; then
+  # shellcheck disable=SC1091
+  source "$CAPTAIN_ROOT/scripts/pane.sh"
+fi
 
 # ── Slug generation ───────────────────────────────────────────────────────────
 
 generate_slug() {
   local task="$1"
-  echo "$task" \
+  # Strip CR/LF/TAB before lowercasing so multi-line task descriptions
+  # don't break downstream sed substitutions (the slug feeds a
+  # filename_template via `sed s/{{slug}}/$slug/g`, which fails on
+  # unescaped newlines).
+  printf '%s' "$task" \
+    | tr '\n\r\t' '   ' \
     | tr '[:upper:]' '[:lower:]' \
     | sed 's/[^a-z0-9]/-/g' \
     | sed 's/--*/-/g' \
@@ -76,23 +89,36 @@ build_review_prompt() {
 
 # ── Agent runners ────────────────────────────────────────────────────────────
 #
-# Each runner calls the agent CLI as a direct subprocess. Output streams
-# to the terminal in real time (full TTY — colors, progress, errors).
-# The orchestrator gets the exit code natively from $?.
+# In zellij mode the orchestrator runs in the "captain" pane and
+# dispatches agent invocations into the "codex" / "claude" panes via
+# fifos. The runners (agent-runner.sh) exec the actual CLI with the
+# prompt on stdin.
+#
+# In inline mode (--no-zellij) the runners exec the CLI directly,
+# inheriting this process's TTY. Both paths leave the orchestrator with
+# an output file containing the agent's stdout, ready for parsing.
 
 run_codex() {
   local prompt_file="$1"
   local output_file="$2"
 
-  codex exec -o "$output_file" --full-auto - < "$prompt_file"
+  if [[ "$CAPTAIN_USE_ZELLIJ" == "true" ]]; then
+    pane_dispatch codex "$prompt_file" "$output_file"
+  else
+    codex exec -o "$output_file" --full-auto - < "$prompt_file"
+  fi
 }
 
 run_claude() {
   local prompt_file="$1"
   local output_file="$2"
 
-  claude -p --output-format text --dangerously-skip-permissions \
-    < "$prompt_file" | tee "$output_file"
+  if [[ "$CAPTAIN_USE_ZELLIJ" == "true" ]]; then
+    pane_dispatch claude "$prompt_file" "$output_file"
+  else
+    claude -p --output-format text --dangerously-skip-permissions \
+      < "$prompt_file" | tee "$output_file"
+  fi
 }
 
 # ── State management ──────────────────────────────────────────────────────────
@@ -156,5 +182,18 @@ log_status() {
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
 cleanup_tmp() {
-  rm -rf "$CAPTAIN_TMP"
+  # Only clean up if we own this temp dir. In zellij mode the entry
+  # script created CAPTAIN_TMP and is responsible for cleanup; the
+  # orchestrator only owns it in inline mode.
+  if [[ "$CAPTAIN_USE_ZELLIJ" != "true" ]]; then
+    rm -rf "$CAPTAIN_TMP"
+  fi
+}
+
+# Verdict matcher anchored to a line start. Without anchoring, a phrase
+# like 'criteria for VERDICT: APPROVE would be...' inside a REJECT body
+# could flip the verdict.
+verdict_is_approve() {
+  local content="$1"
+  printf '%s\n' "$content" | grep -qE '^[[:space:]]*VERDICT:[[:space:]]*APPROVE\b'
 }

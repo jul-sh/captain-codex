@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# captain-codex — orchestrator entry point
+# captain-codex — entry point.
 #
 # Usage:
 #   captain-codex <task description> [flags]
@@ -8,8 +8,18 @@
 #   --skip-plan <path>   Use an existing plan file, skip planning phase
 #   --max-rounds <n>     Cap review iterations (default: from config)
 #   --supervised         Pause after planning and each review for human approval
+#   --no-zellij          Run inline (no terminal multiplexer); useful for tests
 #
-# Requires: codex, claude, jq
+# Behaviour:
+#   The default mode spawns a zellij session with three panes (codex,
+#   claude, captain) and attaches you. The orchestrator runs in the
+#   captain pane and dispatches agent runs into the codex / claude panes
+#   via fifos. You can watch both agents live and Ctrl-C either of them.
+#
+#   --no-zellij keeps the original inline behaviour for environments
+#   without a multiplexer (CI, tests, headless boxes).
+#
+# Requires: codex, claude, jq. zellij is required unless --no-zellij is given.
 
 set -euo pipefail
 
@@ -29,6 +39,7 @@ done
 skip_plan=""
 max_rounds=""
 supervised="false"
+use_zellij="true"
 task_parts=()
 
 while [[ $# -gt 0 ]]; do
@@ -45,6 +56,10 @@ while [[ $# -gt 0 ]]; do
       supervised="true"
       shift
       ;;
+    --no-zellij)
+      use_zellij="false"
+      shift
+      ;;
     *)
       task_parts+=("$1")
       shift
@@ -54,7 +69,7 @@ done
 
 task="${task_parts[*]:-}"
 if [[ -z "$task" && -z "$skip_plan" ]]; then
-  echo "Usage: captain-codex <task description> [--skip-plan <path>] [--max-rounds <n>] [--supervised]" >&2
+  echo "Usage: captain-codex <task description> [--skip-plan <path>] [--max-rounds <n>] [--supervised] [--no-zellij]" >&2
   exit 1
 fi
 
@@ -63,13 +78,84 @@ if [[ -z "$task" ]]; then
   task="(resuming from existing plan: $skip_plan)"
 fi
 
-# ── Launch orchestrator ───────────────────────────────────────────────────────
+# ── Common env for orchestrator and runners ──────────────────────────────────
 
+export CAPTAIN_ROOT="$SCRIPT_DIR"
+export CAPTAIN_TASK="$task"
 export SKIP_PLAN="$skip_plan"
 export MAX_ROUNDS="$max_rounds"
 export SUPERVISED="$supervised"
 export ADHOC_PLAN="${ADHOC_PLAN:-}"
 export ADHOC_IMPL="${ADHOC_IMPL:-}"
 export ADHOC_REVIEW="${ADHOC_REVIEW:-}"
+export CAPTAIN_USE_ZELLIJ="$use_zellij"
 
-exec "$SCRIPT_DIR/scripts/orchestrate.sh" "$task"
+# ── Inline mode: no multiplexer ───────────────────────────────────────────────
+
+if [[ "$use_zellij" == "false" ]]; then
+  exec "$SCRIPT_DIR/scripts/orchestrate.sh"
+fi
+
+# ── Zellij mode ───────────────────────────────────────────────────────────────
+
+if ! command -v zellij &>/dev/null; then
+  echo "ERROR: zellij not found. Install zellij or pass --no-zellij." >&2
+  exit 1
+fi
+
+if [[ -n "${ZELLIJ:-}" ]]; then
+  echo "ERROR: already inside a zellij session. Detach first (Ctrl-q) or pass --no-zellij." >&2
+  echo "       (Running nested zellij would conflict with pane addressing.)" >&2
+  exit 1
+fi
+
+# Per-run temp dir, propagated to runners and orchestrator via env so they
+# all agree on fifo / sentinel paths.
+captain_tmp="$(mktemp -d "${TMPDIR:-/tmp}/captain-codex.XXXXXX")"
+export CAPTAIN_TMP="$captain_tmp"
+
+# Cleanup on exit. We trap EXIT here in the entry script too because the
+# orchestrator runs in a child pane and can't reliably clean up the dir
+# we created out here.
+cleanup() {
+  if [[ -n "${captain_session:-}" ]]; then
+    zellij kill-session "$captain_session" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$captain_tmp"
+}
+trap cleanup EXIT
+
+# Pre-create fifos so the runners (which start at layout-load time) find
+# them ready. mkfifo creates each fifo atomically; the runner is also
+# defensive and will create one if missing.
+mkfifo "$captain_tmp/codex.fifo"
+mkfifo "$captain_tmp/claude.fifo"
+
+# Generate a session name from the task slug. Source helpers just for
+# the slug function; we don't want the full helpers state here.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/helpers.sh"
+slug="$(generate_slug "$task")"
+slug="${slug:-task}"
+# Allow tests / advanced users to fix the session name; otherwise
+# generate a unique one per run so concurrent runs don't collide.
+captain_session="${CAPTAIN_SESSION:-captain-codex-${slug:0:40}-$$}"
+export CAPTAIN_SESSION="$captain_session"
+
+# Render layout into the temp dir so the cwd in the layout resolves to
+# the user's pwd (where they invoked captain-codex).
+layout_file="$captain_tmp/layout.kdl"
+cp "$SCRIPT_DIR/templates/zellij-layout.kdl" "$layout_file"
+
+# zellij inherits this process's environment — CAPTAIN_TMP, CAPTAIN_ROOT,
+# CAPTAIN_TASK, SKIP_PLAN, MAX_ROUNDS, SUPERVISED, ADHOC_*. Each pane's
+# command bash -c "..." also inherits, so the orchestrator and runners
+# all see the same values without us having to template them into KDL.
+
+zellij_rc=0
+zellij --session "$captain_session" --new-session-with-layout "$layout_file" || zellij_rc=$?
+
+# After zellij exits (user detached / killed session / orchestrator
+# closed the captain pane), the EXIT trap above cleans up the session
+# (in case it's lingering) and the temp dir.
+exit "$zellij_rc"

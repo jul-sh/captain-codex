@@ -1,2 +1,4 @@
 .claude/worktrees/
 tasks/
+.claude-architect/
+tests/mock-bin/

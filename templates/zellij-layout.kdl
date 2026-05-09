@@ -1,0 +1,42 @@
+// captain-codex zellij layout.
+//
+// Three named panes coordinated via fifos in $CAPTAIN_TMP:
+//   codex   (top-left)  — runs agent-runner.sh codex,  blocks on a fifo
+//   claude  (top-right) — runs agent-runner.sh claude, blocks on a fifo
+//   captain (bottom)    — runs orchestrate.sh; this is where you read status
+//                         and answer supervised-mode prompts
+//
+// All parameters (task, flags, paths) flow through env vars set by the
+// captain-codex entry script. Nothing is templated into this KDL —
+// embedding shell-escaped strings in KDL is fragile (a previous
+// iteration of this project hit a string-escape bug, commit 51fc8ab).
+//
+// Notes on structure:
+//   - The outer split_direction="horizontal" creates a horizontal
+//     divider (stacked top/bottom).
+//   - The inner split_direction="vertical" creates a vertical divider
+//     (codex left, claude right).
+//   - The captain pane's command falls back to `exec bash` after the
+//     orchestrator returns so the user can read the final summary
+//     before closing the session with Ctrl-q.
+
+layout {
+    tab name="captain-codex" {
+        pane split_direction="horizontal" {
+            pane split_direction="vertical" size="60%" {
+                pane name="codex" {
+                    command "bash"
+                    args "-c" "exec \"$CAPTAIN_ROOT/scripts/agent-runner.sh\" codex"
+                }
+                pane name="claude" {
+                    command "bash"
+                    args "-c" "exec \"$CAPTAIN_ROOT/scripts/agent-runner.sh\" claude"
+                }
+            }
+            pane name="captain" size="40%" focus=true {
+                command "bash"
+                args "-c" "\"$CAPTAIN_ROOT/scripts/orchestrate.sh\"; echo; echo 'orchestrator exited — close this session with Ctrl-q'; exec bash"
+            }
+        }
+    }
+}
