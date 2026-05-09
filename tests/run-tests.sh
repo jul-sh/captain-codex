@@ -386,6 +386,31 @@ test_entry_point_dep_check() {
   assert_contains "missing dep error" "$output" "required but not found"
 }
 
+test_entry_point_env_passthrough() {
+  echo "Test: entry point honors MAX_ROUNDS / SUPERVISED / SKIP_PLAN env vars"
+
+  local workdir
+  workdir=$(mktemp -d /tmp/captain-codex-env-XXXXXX)
+  mkdir -p "$workdir/.claude-architect" "$workdir/tasks"
+
+  # Run with MAX_ROUNDS=2 in the env (no flag) and a mock that always rejects.
+  local output
+  output=$(
+    cd "$workdir"
+    PATH="$MOCK_BIN:$PATH" \
+    MAX_ROUNDS=2 \
+    MOCK_CODEX_REJECT_ROUNDS=999 \
+    MOCK_CODEX_STATE_FILE="/tmp/mock-codex-env-$$" \
+      "$PROJECT_ROOT/captain-codex" --no-zellij "env passthrough check" 2>&1
+  ) || true
+
+  local sf="$workdir/.claude-architect/state.json"
+  assert_eq "max_rounds env propagated" "2" "$(jq -r '.max_rounds' "$sf")"
+  assert_eq "phase failed (max exceeded)" "failed" "$(jq -r '.phase' "$sf")"
+
+  rm -rf "$workdir" "/tmp/mock-codex-env-$$"
+}
+
 # ── Integration Tests (full orchestration with mock agents) ──────────────────
 
 test_full_orchestration_approve() {
@@ -598,6 +623,7 @@ main() {
   test_pane_dispatch_timeout
   test_entry_point_flags
   test_entry_point_dep_check
+  test_entry_point_env_passthrough
 
   if [[ "$RUN_INTEGRATION" == "true" ]]; then
     echo ""

@@ -36,9 +36,12 @@ done
 
 # ── Parse flags ───────────────────────────────────────────────────────────────
 
-skip_plan=""
-max_rounds=""
-supervised="false"
+# Inbound env vars seed defaults — flags override them when present. This
+# matters for callers (notably the test harness) that set MAX_ROUNDS,
+# SKIP_PLAN, or SUPERVISED via env without the corresponding flag.
+skip_plan="${SKIP_PLAN:-}"
+max_rounds="${MAX_ROUNDS:-}"
+supervised="${SUPERVISED:-false}"
 use_zellij="true"
 task_parts=()
 
