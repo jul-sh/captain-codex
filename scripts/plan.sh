@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Generate slug from task description
-slug=$(echo "$task" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-60)
+slug=$(printf '%s' "$task" | tr '\n\r\t' '   ' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-60)
 plan_filename=$(echo "$filename_template" | sed "s/{{slug}}/$slug/g")
 plan_path="$plans_dir/$plan_filename"
 
